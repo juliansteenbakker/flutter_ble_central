@@ -18,6 +18,8 @@ dependencies:
   flutter:
     sdk: flutter
 
+  permission_handler: ^8.3.0
+
   flutter_ble_central:
     # When depending on this package from a real application you should use:
     #   flutter_ble_central: ^x.y.z

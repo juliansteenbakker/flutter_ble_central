@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,34 +17,64 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
+  final FlutterBleCentral bleCentral = FlutterBleCentral();
 
+  late final Stream<String> scanResultStream;
+
+  var i = 0;
   @override
   void initState() {
     super.initState();
     initPlatformState();
+    bleCentral.onScanResult.listen((event) {
+      i++;
+      debugPrint('EVENT $i');
+    });
   }
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
-    String platformVersion;
-    // Platform messages may fail, so we use a try/catch PlatformException.
-    // We also handle the message potentially returning null.
-    try {
-      platformVersion =
-          await FlutterBleCentral.platformVersion ?? 'Unknown platform version';
-    } on PlatformException {
-      platformVersion = 'Failed to get platform version.';
-    }
-
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling
     // setState to update our non-existent appearance.
     if (!mounted) return;
+  }
 
-    setState(() {
-      _platformVersion = platformVersion;
-    });
+  bool isscanning = false;
+
+  Future<void> _toggleScan() async {
+    if (isscanning) {
+      await bleCentral.stop();
+      isscanning = false;
+    } else {
+      await bleCentral.start();
+      isscanning = true;
+    }
+  }
+
+  Future<void> _requestPermissions() async {
+    // await Permission.bluetooth.shouldShowRequestRationale;
+
+    // if ()
+
+    final Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetooth,
+      // Permission.bluetoothAdvertise,
+      // Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.location,
+    ].request();
+    for (final status in statuses.keys) {
+      if (statuses[status] == PermissionStatus.granted) {
+        debugPrint('$status permission granted');
+      } else if (statuses[status] == PermissionStatus.denied) {
+        debugPrint(
+          '$status denied. Show a dialog with a reason and again ask for the permission.',);
+      } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
+        debugPrint(
+          '$status permanently denied. Take the user to the settings page.',);
+      }
+    }
   }
 
   @override
@@ -51,10 +82,39 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Plugin example app'),
+          title: const Text('Flutter BLE Central Example'),
         ),
         body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+          child: Column(
+            children: [
+              CircularProgressIndicator(),
+              // StreamBuilder(
+              //   stream: bleCentral.onScanResult,
+              //   initialData: '',
+              //   builder:
+              //       (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
+              //     return Text('Packet: ${snapshot.data}');
+              //   },),
+              MaterialButton(
+                onPressed: _toggleScan,
+                child: Text(
+                  'Toggle advertising',
+                  style: Theme.of(context)
+                      .primaryTextTheme
+                      .button!
+                      .copyWith(color: Colors.blue),
+                ),),
+              MaterialButton(
+                onPressed: _requestPermissions,
+                child: Text(
+                  'Request Permissions',
+                  style: Theme.of(context)
+                      .primaryTextTheme
+                      .button!
+                      .copyWith(color: Colors.blue),
+                ),),
+            ],
+          ),
         ),
       ),
     );
