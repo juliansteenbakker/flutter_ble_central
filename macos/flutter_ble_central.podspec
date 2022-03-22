@@ -1,0 +1,22 @@
+#
+# To learn more about a Podspec see http://guides.cocoapods.org/syntax/podspec.html.
+# Run `pod lib lint flutter_ble_central.podspec` to validate before publishing.
+#
+Pod::Spec.new do |s|
+  s.name             = 'flutter_ble_central'
+  s.version          = '0.0.1'
+  s.summary          = 'A Flutter package for scanning BLE data in central mode.'
+  s.description      = <<-DESC
+A Flutter package for scanning BLE data in central mode.
+                       DESC
+  s.homepage         = 'http://example.com'
+  s.license          = { :file => '../LICENSE' }
+  s.author           = { 'Your Company' => 'email@example.com' }
+  s.source           = { :path => '.' }
+  s.source_files     = 'Classes/**/*'
+  s.dependency 'FlutterMacOS'
+
+  s.platform = :osx, '10.11'
+  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.swift_version = '5.0'
+end
