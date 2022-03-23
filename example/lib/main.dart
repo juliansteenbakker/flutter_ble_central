@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -28,7 +30,7 @@ class _MyAppState extends State<MyApp> {
     initPlatformState();
     bleCentral.onScanResult.listen((event) {
       i++;
-      debugPrint('EVENT $i');
+      debugPrint('FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}');
     });
   }
 
@@ -87,7 +89,7 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Column(
             children: [
-              CircularProgressIndicator(),
+              const CircularProgressIndicator(),
               // StreamBuilder(
               //   stream: bleCentral.onScanResult,
               //   initialData: '',

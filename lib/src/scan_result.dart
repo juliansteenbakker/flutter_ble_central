@@ -17,6 +17,7 @@
 //
 // /// A scan result emitted by the scanning operation, containing [Peripheral] and [AdvertisementData].
 // class ScanResult {
+//
 //   final Peripheral peripheral;
 //
 //   /// Signal strength of the peripheral in dBm.

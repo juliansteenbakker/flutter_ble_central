@@ -5,8 +5,10 @@
  */
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_ble_central/src/models/scan_result.dart';
 
 class FlutterBleCentral {
   /// Singleton instance
@@ -29,7 +31,9 @@ class FlutterBleCentral {
   final EventChannel _scanResultEventChannel = const EventChannel(
     'dev.steenbakker.flutter_ble_central/scan_result', );
 
-  Stream<String>? _scanResult;
+  Stream<ScanResult>? _scanResult;
+  StreamTransformer<dynamic, ScanResult>? _scanResultTransformer;
+
 
   //TODO Event Channel used to received data
   // final EventChannel _dataReceivedEventChannel = const EventChannel(
@@ -63,11 +67,20 @@ class FlutterBleCentral {
   }
 
   /// Returns Stream of MTU updates.
-  Stream<String> get onScanResult {
+  Stream<ScanResult> get onScanResult {
+
+    _scanResultTransformer ??= StreamTransformer.fromHandlers(handleData: handleData);
     _scanResult ??= _scanResultEventChannel
-        .receiveBroadcastStream()
-        .cast<String>();
+        .receiveBroadcastStream().transform(_scanResultTransformer!);
+
     return _scanResult!;
+  }
+
+
+
+  void handleData(data, EventSink sink) {
+    final ScanResult result = ScanResult.fromJson(jsonDecode(data));
+    sink.add(result);
   }
 
 

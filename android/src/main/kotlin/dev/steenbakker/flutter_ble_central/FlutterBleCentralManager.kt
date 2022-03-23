@@ -66,10 +66,13 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
     mBluetoothLeScanner?.stopScan(scanCallback)
   }
 
+  var i = 0
+
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       super.onScanResult(callbackType, result)
-
+      i++
+//      Log.d("BLE", "REAL RECEIVED $i")
       scanResultHandler.publishScanResult(result)
 
 
