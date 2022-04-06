@@ -6,6 +6,8 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
@@ -79,7 +81,20 @@ class FlutterBleCentral {
 
 
   void handleData(data, EventSink sink) {
-    final ScanResult result = ScanResult.fromJson(jsonDecode(data));
+    ScanResult? result;
+    if (Platform.isIOS) {
+      // final Map test = jsonDecode(data);
+      Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
+      if (manu.length < 3) return;
+      Map<String, dynamic> manufacturerSpecificData = {"${manu[0] | manu[1] << 8}": manu.skip(2).toList()};
+      Map<String, dynamic> scanRecord = {'manufacturerSpecificData': manufacturerSpecificData};
+      data['scanRecord'] = scanRecord;
+
+
+      result = ScanResult.fromJson(Map<String, dynamic>.from(data));
+    } else {
+      result = ScanResult.fromJson(jsonDecode(data));
+    }
     sink.add(result);
   }
 
