@@ -43,7 +43,8 @@ class ScanRecord {
       this.serviceUuids,
       this.txPowerLevel});
 
-  factory ScanRecord.fromJson(Map<String, dynamic> json) => _$ScanRecordFromJson(json);
+  factory ScanRecord.fromJson(Map<String, dynamic> json) =>
+      _$ScanRecordFromJson(json);
 
   Map<String, dynamic> toJson() => _$ScanRecordToJson(this);
 }

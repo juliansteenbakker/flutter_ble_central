@@ -14,8 +14,7 @@ import 'package:flutter_ble_central/src/models/scan_result.dart';
 
 class FlutterBleCentral {
   /// Singleton instance
-  static final FlutterBleCentral _instance =
-  FlutterBleCentral._internal();
+  static final FlutterBleCentral _instance = FlutterBleCentral._internal();
 
   /// Singleton factory
   factory FlutterBleCentral() {
@@ -27,15 +26,15 @@ class FlutterBleCentral {
 
   /// Method Channel used to communicate state with
   final MethodChannel _methodChannel =
-  const MethodChannel('dev.steenbakker.flutter_ble_central/method');
+      const MethodChannel('dev.steenbakker.flutter_ble_central/method');
 
   /// Event Channel for MTU state
   final EventChannel _scanResultEventChannel = const EventChannel(
-    'dev.steenbakker.flutter_ble_central/scan_result', );
+    'dev.steenbakker.flutter_ble_central/scan_result',
+  );
 
   Stream<ScanResult>? _scanResult;
   StreamTransformer<dynamic, ScanResult>? _scanResultTransformer;
-
 
   //TODO Event Channel used to received data
   // final EventChannel _dataReceivedEventChannel = const EventChannel(
@@ -60,36 +59,39 @@ class FlutterBleCentral {
   Future<bool> get isSupported async =>
       await _methodChannel.invokeMethod<bool>('isSupported') ?? false;
 
-
   /// Stop advertising
   Future<bool> enableBluetooth({bool askUser = true}) async {
     return await _methodChannel.invokeMethod<bool>(
-      'enableBluetooth', askUser,) ??
+          'enableBluetooth',
+          askUser,
+        ) ??
         false;
   }
 
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
-
-    _scanResultTransformer ??= StreamTransformer.fromHandlers(handleData: handleData);
+    _scanResultTransformer ??=
+        StreamTransformer.fromHandlers(handleData: handleData);
     _scanResult ??= _scanResultEventChannel
-        .receiveBroadcastStream().transform(_scanResultTransformer!);
+        .receiveBroadcastStream()
+        .transform(_scanResultTransformer!);
 
     return _scanResult!;
   }
 
-
-
   void handleData(data, EventSink sink) {
     ScanResult? result;
-    if (Platform.isIOS) {
+    if (Platform.isIOS || Platform.isMacOS) {
       // final Map test = jsonDecode(data);
       Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
       if (manu.length < 3) return;
-      Map<String, dynamic> manufacturerSpecificData = {"${manu[0] | manu[1] << 8}": manu.skip(2).toList()};
-      Map<String, dynamic> scanRecord = {'manufacturerSpecificData': manufacturerSpecificData};
+      Map<String, dynamic> manufacturerSpecificData = {
+        "${manu[0] | manu[1] << 8}": manu.skip(2).toList()
+      };
+      Map<String, dynamic> scanRecord = {
+        'manufacturerSpecificData': manufacturerSpecificData
+      };
       data['scanRecord'] = scanRecord;
-
 
       result = ScanResult.fromJson(Map<String, dynamic>.from(data));
     } else {
@@ -97,6 +99,4 @@ class FlutterBleCentral {
     }
     sink.add(result);
   }
-
-
 }

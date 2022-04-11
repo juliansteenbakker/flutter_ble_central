@@ -11,7 +11,6 @@ part 'scan_result.g.dart';
 /// A scan result emitted by the scanning operation, containing [Peripheral] and [AdvertisementData].
 @JsonSerializable()
 class ScanResult {
-
   final BluetoothDevice? device;
 
   final int? eventType;
@@ -45,7 +44,8 @@ class ScanResult {
       this.scanRecord,
       this.timestampNanos});
 
-  factory ScanResult.fromJson(Map<String, dynamic> json) => _$ScanResultFromJson(json);
+  factory ScanResult.fromJson(Map<String, dynamic> json) =>
+      _$ScanResultFromJson(json);
 
   Map<String, dynamic> toJson() => _$ScanResultToJson(this);
 }

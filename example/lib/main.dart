@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -22,6 +19,7 @@ class _MyAppState extends State<MyApp> {
   final FlutterBleCentral bleCentral = FlutterBleCentral();
 
   late final Stream<String> scanResultStream;
+  Map<String, ScanResult> devices = {};
 
   var i = 0;
   @override
@@ -30,7 +28,14 @@ class _MyAppState extends State<MyApp> {
     initPlatformState();
     bleCentral.onScanResult.listen((event) {
       i++;
-      debugPrint('FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}');
+      debugPrint(
+          'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}');
+      if (event.device != null &&
+          !devices.keys.contains(event.device?.address)) {
+        setState(() {
+          devices[event.device!.address] = event;
+        });
+      }
     });
   }
 
@@ -42,15 +47,15 @@ class _MyAppState extends State<MyApp> {
     if (!mounted) return;
   }
 
-  bool isscanning = false;
+  bool isScanning = false;
 
   Future<void> _toggleScan() async {
-    if (isscanning) {
+    if (isScanning) {
       await bleCentral.stop();
-      isscanning = false;
+      isScanning = false;
     } else {
       await bleCentral.start();
-      isscanning = true;
+      isScanning = true;
     }
   }
 
@@ -71,10 +76,12 @@ class _MyAppState extends State<MyApp> {
         debugPrint('$status permission granted');
       } else if (statuses[status] == PermissionStatus.denied) {
         debugPrint(
-          '$status denied. Show a dialog with a reason and again ask for the permission.',);
+          '$status denied. Show a dialog with a reason and again ask for the permission.',
+        );
       } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
         debugPrint(
-          '$status permanently denied. Take the user to the settings page.',);
+          '$status permanently denied. Take the user to the settings page.',
+        );
       }
     }
   }
@@ -84,40 +91,63 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Flutter BLE Central Example'),
+          title: const Text('Flutter BLE Central example'),
+          actions: <Widget>[
+            IconButton(
+                onPressed: _requestPermissions, icon: Icon(Icons.security)),
+            if (isScanning)
+              IconButton(
+                  icon: const Icon(Icons.pause_circle_filled),
+                  onPressed: () => setState(() {
+                        isScanning = false;
+                        bleCentral.stop();
+                      }))
+            else
+              IconButton(
+                icon: const Icon(Icons.play_arrow),
+                onPressed: () {
+                  setState(() {
+                    isScanning = true;
+                    devices.clear();
+                    bleCentral.start();
+                  });
+                },
+              )
+          ],
         ),
-        body: Center(
-          child: Column(
-            children: [
-              const CircularProgressIndicator(),
-              // StreamBuilder(
-              //   stream: bleCentral.onScanResult,
-              //   initialData: '',
-              //   builder:
-              //       (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
-              //     return Text('Packet: ${snapshot.data}');
-              //   },),
-              MaterialButton(
-                onPressed: _toggleScan,
-                child: Text(
-                  'Toggle advertising',
-                  style: Theme.of(context)
-                      .primaryTextTheme
-                      .button!
-                      .copyWith(color: Colors.blue),
-                ),),
-              MaterialButton(
-                onPressed: _requestPermissions,
-                child: Text(
-                  'Request Permissions',
-                  style: Theme.of(context)
-                      .primaryTextTheme
-                      .button!
-                      .copyWith(color: Colors.blue),
-                ),),
-            ],
-          ),
-        ),
+        body: devices.isEmpty
+            ? const Center(
+                child: Text('No device'),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.all(8),
+                itemBuilder: (BuildContext context, int index) {
+                  final scanResult = devices.values.elementAt(index);
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(Icons.bluetooth),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                // Text(s),
+                                Text('${scanResult.scanRecord?.deviceName}'),
+                                Text('${scanResult.device?.address}'),
+                                Text('RSSI: ${scanResult.rssi}'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                separatorBuilder: (context, index) => const SizedBox(height: 5),
+                itemCount: devices.length,
+              ),
       ),
     );
   }

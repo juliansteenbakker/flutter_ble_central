@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 import 'package:json_annotation/json_annotation.dart';
 
-class Uint8ListMapIntConverter implements JsonConverter<Map<int, Uint8List>?, Map<String, dynamic>?> {
+class Uint8ListMapIntConverter
+    implements JsonConverter<Map<int, Uint8List>?, Map<String, dynamic>?> {
   const Uint8ListMapIntConverter();
 
   @override

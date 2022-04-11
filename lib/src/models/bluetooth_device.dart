@@ -8,7 +8,8 @@ class BluetoothDevice {
 
   BluetoothDevice({required this.address});
 
-  factory BluetoothDevice.fromJson(Map<String, dynamic> json) => _$BluetoothDeviceFromJson(json);
+  factory BluetoothDevice.fromJson(Map<String, dynamic> json) =>
+      _$BluetoothDeviceFromJson(json);
 
   Map<String, dynamic> toJson() => _$BluetoothDeviceToJson(this);
 }
