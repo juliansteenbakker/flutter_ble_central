@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -21,7 +21,7 @@ class _MyAppState extends State<MyApp> {
   late final Stream<String> scanResultStream;
   Map<String, ScanResult> devices = {};
 
-  var i = 0;
+  int i = 0;
   @override
   void initState() {
     super.initState();
@@ -29,7 +29,8 @@ class _MyAppState extends State<MyApp> {
     bleCentral.onScanResult.listen((event) {
       i++;
       debugPrint(
-          'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}');
+        'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}',
+      );
       if (event.device != null &&
           !devices.keys.contains(event.device?.address)) {
         setState(() {
@@ -48,16 +49,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   bool isScanning = false;
-
-  Future<void> _toggleScan() async {
-    if (isScanning) {
-      await bleCentral.stop();
-      isScanning = false;
-    } else {
-      await bleCentral.start();
-      isScanning = true;
-    }
-  }
 
   Future<void> _requestPermissions() async {
     // await Permission.bluetooth.shouldShowRequestRationale;
@@ -94,14 +85,17 @@ class _MyAppState extends State<MyApp> {
           title: const Text('Flutter BLE Central example'),
           actions: <Widget>[
             IconButton(
-                onPressed: _requestPermissions, icon: Icon(Icons.security)),
+              onPressed: _requestPermissions,
+              icon: const Icon(Icons.security),
+            ),
             if (isScanning)
               IconButton(
-                  icon: const Icon(Icons.pause_circle_filled),
-                  onPressed: () => setState(() {
-                        isScanning = false;
-                        bleCentral.stop();
-                      }))
+                icon: const Icon(Icons.pause_circle_filled),
+                onPressed: () => setState(() {
+                  isScanning = false;
+                  bleCentral.stop();
+                }),
+              )
             else
               IconButton(
                 icon: const Icon(Icons.play_arrow),

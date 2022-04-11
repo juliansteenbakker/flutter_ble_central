@@ -79,23 +79,25 @@ class FlutterBleCentral {
     return _scanResult!;
   }
 
-  void handleData(data, EventSink sink) {
+  void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
     if (Platform.isIOS || Platform.isMacOS) {
-      // final Map test = jsonDecode(data);
-      Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
+      data as Map<String, dynamic>;
+      final Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
       if (manu.length < 3) return;
-      Map<String, dynamic> manufacturerSpecificData = {
+      final Map<String, dynamic> manufacturerSpecificData = {
         "${manu[0] | manu[1] << 8}": manu.skip(2).toList()
       };
-      Map<String, dynamic> scanRecord = {
+      final Map<String, dynamic> scanRecord = {
         'manufacturerSpecificData': manufacturerSpecificData
       };
       data['scanRecord'] = scanRecord;
 
       result = ScanResult.fromJson(Map<String, dynamic>.from(data));
     } else {
-      result = ScanResult.fromJson(jsonDecode(data));
+      result = ScanResult.fromJson(
+        jsonDecode(data as String) as Map<String, dynamic>,
+      );
     }
     sink.add(result);
   }
