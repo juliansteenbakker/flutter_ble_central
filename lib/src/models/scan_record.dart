@@ -1,10 +1,9 @@
 import 'dart:typed_data';
 
+import 'package:flutter_ble_central/src/models/map_uint8list_converter.dart';
 import 'package:flutter_ble_central/src/models/uint8list_converter.dart';
+import 'package:flutter_ble_central/src/models/uint8list_map_string_converter.dart';
 import 'package:json_annotation/json_annotation.dart';
-
-import 'map_uint8list_converter.dart';
-import 'uint8list_map_string_converter.dart';
 
 part 'scan_record.g.dart';
 
@@ -32,18 +31,20 @@ class ScanRecord {
 
   final int? txPowerLevel;
 
-  ScanRecord(
-      {this.advertiseFlags,
-      this.advertisingDataMap,
-      this.bytes,
-      this.deviceName,
-      this.manufacturerSpecificData,
-      this.serviceData,
-      this.serviceSolicitationUuids,
-      this.serviceUuids,
-      this.txPowerLevel});
+  ScanRecord({
+    this.advertiseFlags,
+    this.advertisingDataMap,
+    this.bytes,
+    this.deviceName,
+    this.manufacturerSpecificData,
+    this.serviceData,
+    this.serviceSolicitationUuids,
+    this.serviceUuids,
+    this.txPowerLevel,
+  });
 
-  factory ScanRecord.fromJson(Map<String, dynamic> json) => _$ScanRecordFromJson(json);
+  factory ScanRecord.fromJson(Map<String, dynamic> json) =>
+      _$ScanRecordFromJson(json);
 
   Map<String, dynamic> toJson() => _$ScanRecordToJson(this);
 }
