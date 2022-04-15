@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
@@ -22,21 +23,35 @@ class _MyAppState extends State<MyApp> {
   Map<String, ScanResult> devices = {};
 
   int i = 0;
+  int? queue = 0;
   @override
   void initState() {
     super.initState();
     initPlatformState();
-    bleCentral.onScanResult.listen((event) {
+
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      debugPrint('Packets found: $i, in queue $queue');
+    });
+
+
+
+    bleCentral.onScanResult.listen(( event) {
+      // debugPrint('')
+      // if ()
+      // final Map<String, dynamic> json = jsonDecode(event as String) as Map<String, dynamic>;
+      // event as Map<String, dynamic>;
       i++;
-      debugPrint(
-        'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}',
-      );
-      if (event.device != null &&
-          !devices.keys.contains(event.device?.address)) {
-        setState(() {
-          devices[event.device!.address] = event;
-        });
-      }
+      // debugPrint('${json['queue']}');
+      // queue = json['queue'] as int?;
+      // debugPrint(
+      //   'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}',
+      // );
+      // if (event.device != null &&
+      //     !devices.keys.contains(event.device?.address)) {
+      //   setState(() {
+      //     devices[event.device!.address] = event;
+      //   });
+      // }
     });
   }
 
@@ -58,7 +73,7 @@ class _MyAppState extends State<MyApp> {
     final Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetooth,
       // Permission.bluetoothAdvertise,
-      // Permission.bluetoothConnect,
+      Permission.bluetoothConnect,
       Permission.bluetoothScan,
       Permission.location,
     ].request();
@@ -111,7 +126,8 @@ class _MyAppState extends State<MyApp> {
         ),
         body: devices.isEmpty
             ? const Center(
-                child: Text('No device'),
+          child: CircularProgressIndicator(),
+                // child: Text('No device'),
               )
             : ListView.separated(
                 padding: const EdgeInsets.all(8),

@@ -29,6 +29,12 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
     }
     
     func publishScanResult(advertiseData: AdvertisementData, rssi: Int) {
+//        let num = advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber
+//        var connectable = false
+//        if num != nil {
+//            connectable = num!.boolValue
+//        }
+        
         if let eventSink = self.eventSink {
             let serviceData = advertiseData[CBAdvertisementDataServiceDataKey] as? ServiceData ?? [:]
             let serviceUuids = advertiseData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
@@ -46,7 +52,8 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
                 "serviceUuids": serviceUuids.map { entry in
                     [entry.data]
                 },
-                "manufacturerSpecificData": manufacturerData
+                "manufacturerSpecificData": manufacturerData,
+//                "connectable": connectable
             ] as [String : Any]
             eventSink(deviceDiscoveryMessage)
         }

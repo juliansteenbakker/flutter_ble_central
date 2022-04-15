@@ -79,10 +79,15 @@ class FlutterBleCentral {
     return _scanResult!;
   }
 
+  /// Returns Stream of MTU updates.
+  Stream<dynamic> get onRawScanResult {
+    return _scanResultEventChannel.receiveBroadcastStream();
+  }
+
   void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
     if (Platform.isIOS || Platform.isMacOS) {
-      data as Map<String, dynamic>;
+      data as Map<dynamic, dynamic>;
       final Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
       if (manu.length < 3) return;
       final Map<String, dynamic> manufacturerSpecificData = {

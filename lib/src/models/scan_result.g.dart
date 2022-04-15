@@ -21,6 +21,8 @@ ScanResult _$ScanResultFromJson(Map<String, dynamic> json) => ScanResult(
           ? null
           : ScanRecord.fromJson(json['scanRecord'] as Map<String, dynamic>),
       timestampNanos: json['timestampNanos'] as int?,
+      connectable: json['connectable'] as bool?,
+      queue: json['queue'] as int?,
     );
 
 Map<String, dynamic> _$ScanResultToJson(ScanResult instance) =>
@@ -35,4 +37,6 @@ Map<String, dynamic> _$ScanResultToJson(ScanResult instance) =>
       'periodicAdvertisingInterval': instance.periodicAdvertisingInterval,
       'scanRecord': instance.scanRecord,
       'timestampNanos': instance.timestampNanos,
+      'connectable': instance.connectable,
+      'queue': instance.queue,
     };

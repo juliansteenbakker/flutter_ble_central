@@ -5,9 +5,15 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.Context
 import android.os.Build
+import android.os.ParcelUuid
 import android.util.Log
+import android.util.SparseArray
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResultHandler) {
 
@@ -59,39 +65,55 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
 //      val f = ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString(uuid)).build()
 //      filters.add(f)
 //    }
+    startDuplicateDetection()
     mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
   }
 
   fun stopScan() {
+    stopDuplicateDetection()
     mBluetoothLeScanner?.stopScan(scanCallback)
   }
 
-  var i = 0
+  private val scope = MainScope() // could also use an other scope such as viewModelScope if available
+  var job: Job? = null
+
+  private fun startDuplicateDetection() {
+    stopDuplicateDetection()
+    job = scope.launch {
+      while(true) {
+        byteArray.clear()
+        delay(5000)
+      }
+    }
+  }
+
+  val byteArray = mutableListOf<ByteArray>()
+
+  private fun stopDuplicateDetection() {
+    job?.cancel()
+    job = null
+  }
 
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       super.onScanResult(callbackType, result)
-      i++
-//      Log.d("BLE", "REAL RECEIVED $i")
-      scanResultHandler.publishScanResult(result)
 
 
-//      if (!allowDuplicates && result.device != null && result.device.address != null) {
-//        if (macDeviceScanned.contains(result.device.address)) {
-//          return
-//        }
-//        macDeviceScanned.add(result.device.address)
-//      }
-//      val scanResult: Protos.ScanResult = ProtoMaker.from(result.device, result)
-//      invokeMethodUIThread("ScanResult", scanResult.toByteArray())
+//      scanResultHandler.publishScanResult(result)
+      val manuData = result.scanRecord?.getManufacturerSpecificData(4951)
+      if (manuData != null && !byteArray.contains(manuData) && manuData.size == 24) {
+        scanResultHandler.ii++
+        byteArray.add(manuData)
+        scanResultHandler.publishScanResult(result)
+      } else if (result.scanRecord?.serviceUuids != null && (result.scanRecord!!.serviceUuids!!.contains(ParcelUuid.fromString("00001530-1212-efde-1523-785feabcd123")) ||
+              result.scanRecord!!.serviceUuids!!.contains(ParcelUuid.fromString("0000fe59-0000-1000-8000-00805f9b34fb")))) {
+        // DFU Packet
+
+      }
     }
 
     override fun onBatchScanResults(results: List<ScanResult>) {
       super.onBatchScanResults(results)
-    }
-
-    override fun onScanFailed(errorCode: Int) {
-      super.onScanFailed(errorCode)
     }
   }
 }
