@@ -30,9 +30,7 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
       mBluetoothManager = bluetoothManager
 
       val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
-      //&& !bluetoothAdapter.isMultipleAdvertisementSupported
       if (bluetoothAdapter.bluetoothLeScanner == null) {
-        //disabled
 //        throw PeripheralException(PeripheralState.unsupported)
       } else {
         mBluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
@@ -41,20 +39,6 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
   }
 
   fun startScan(scanSettings: ScanSettings, result: MethodChannel.Result) {
-    try {
-//      allowDuplicates = scanSettings
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        startScan21(scanSettings)
-      } else {
-//        startScan18(settings)
-      }
-      result.success(null)
-    } catch (e: Exception) {
-      result.error("startScan", e.message, e)
-    }
-  }
-
-  private fun startScan21(scanSettings: ScanSettings) {
 //    val scanner = mBluetoothAdapter!!.bluetoothLeScanner
 //            ?: throw IllegalStateException("getBluetoothLeScanner() is null. Is the Adapter on?")
 //    val scanMode: Int = scanSettings.scanMode
@@ -65,8 +49,13 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
 //      val f = ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString(uuid)).build()
 //      filters.add(f)
 //    }
-    startDuplicateDetection()
+//    startDuplicateDetection()
+    try {
     mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
+    result.success(null)
+    } catch (e: Exception) {
+      result.error("startScan", e.message, e)
+    }
   }
 
   fun stopScan() {
@@ -77,6 +66,7 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
   private val scope = MainScope() // could also use an other scope such as viewModelScope if available
   var job: Job? = null
 
+  // TODO: Check if duplicate detection is neccessary
   private fun startDuplicateDetection() {
     stopDuplicateDetection()
     job = scope.launch {
@@ -97,19 +87,10 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       super.onScanResult(callbackType, result)
+      scanResultHandler.ii++
+//      byteArray.add(manuData)
+      scanResultHandler.publishScanResult(result)
 
-
-//      scanResultHandler.publishScanResult(result)
-      val manuData = result.scanRecord?.getManufacturerSpecificData(4951)
-      if (manuData != null && !byteArray.contains(manuData) && manuData.size == 24) {
-        scanResultHandler.ii++
-        byteArray.add(manuData)
-        scanResultHandler.publishScanResult(result)
-      } else if (result.scanRecord?.serviceUuids != null && (result.scanRecord!!.serviceUuids!!.contains(ParcelUuid.fromString("00001530-1212-efde-1523-785feabcd123")) ||
-              result.scanRecord!!.serviceUuids!!.contains(ParcelUuid.fromString("0000fe59-0000-1000-8000-00805f9b34fb")))) {
-        // DFU Packet
-
-      }
     }
 
     override fun onBatchScanResults(results: List<ScanResult>) {
