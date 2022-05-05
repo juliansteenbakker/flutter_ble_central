@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
@@ -17,62 +16,27 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final FlutterBleCentral bleCentral = FlutterBleCentral();
-
-  late final Stream<String> scanResultStream;
   Map<String, ScanResult> devices = {};
-
+  bool isScanning = false;
   int i = 0;
   int? queue = 0;
+
   @override
   void initState() {
     super.initState();
-    initPlatformState();
 
     Timer.periodic(const Duration(seconds: 1), (timer) {
       debugPrint('Packets found: $i, in queue $queue');
     });
 
-
-
-    bleCentral.onScanResult.listen(( event) {
-      // debugPrint('')
-      // if ()
-      // final Map<String, dynamic> json = jsonDecode(event as String) as Map<String, dynamic>;
-      // event as Map<String, dynamic>;
+    FlutterBleCentral().onScanResult.listen((event) {
       i++;
-      // debugPrint('${json['queue']}');
-      // queue = json['queue'] as int?;
-      // debugPrint(
-      //   'FLUTTER $i rssi ${event.rssi} manudata ${event.scanRecord?.manufacturerSpecificData}',
-      // );
-      // if (event.device != null &&
-      //     !devices.keys.contains(event.device?.address)) {
-      //   setState(() {
-      //     devices[event.device!.address] = event;
-      //   });
-      // }
     });
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
-    // If the widget was removed from the tree while the asynchronous platform
-    // message was in flight, we want to discard the reply rather than calling
-    // setState to update our non-existent appearance.
-    if (!mounted) return;
-  }
-
-  bool isScanning = false;
-
   Future<void> _requestPermissions() async {
-    // await Permission.bluetooth.shouldShowRequestRationale;
-
-    // if ()
-
     final Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetooth,
-      // Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
       Permission.bluetoothScan,
       Permission.location,
@@ -108,7 +72,7 @@ class _MyAppState extends State<MyApp> {
                 icon: const Icon(Icons.pause_circle_filled),
                 onPressed: () => setState(() {
                   isScanning = false;
-                  bleCentral.stop();
+                  FlutterBleCentral().stop();
                 }),
               )
             else
@@ -118,7 +82,7 @@ class _MyAppState extends State<MyApp> {
                   setState(() {
                     isScanning = true;
                     devices.clear();
-                    bleCentral.start();
+                    FlutterBleCentral().start();
                   });
                 },
               )
@@ -126,7 +90,7 @@ class _MyAppState extends State<MyApp> {
         ),
         body: devices.isEmpty
             ? const Center(
-          child: CircularProgressIndicator(),
+                child: CircularProgressIndicator(),
                 // child: Text('No device'),
               )
             : ListView.separated(

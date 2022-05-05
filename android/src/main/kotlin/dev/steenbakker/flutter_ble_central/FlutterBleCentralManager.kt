@@ -51,7 +51,7 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
 //    }
 //    startDuplicateDetection()
     try {
-    mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
+      mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
     result.success(null)
     } catch (e: Exception) {
       result.error("startScan", e.message, e)

@@ -44,7 +44,7 @@ class ScanResult {
     this.scanRecord,
     this.timestampNanos,
     this.connectable,
-    this.queue
+    this.queue,
   });
 
   factory ScanResult.fromJson(Map<String, dynamic> json) =>

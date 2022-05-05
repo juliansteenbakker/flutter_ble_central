@@ -9,7 +9,12 @@ class BluetoothDevice {
   final String? name;
   final int? type;
 
-  BluetoothDevice({required this.address, this.bondState, this.name, this.type, });
+  BluetoothDevice({
+    required this.address,
+    this.bondState,
+    this.name,
+    this.type,
+  });
 
   factory BluetoothDevice.fromJson(Map<String, dynamic> json) =>
       _$BluetoothDeviceFromJson(json);

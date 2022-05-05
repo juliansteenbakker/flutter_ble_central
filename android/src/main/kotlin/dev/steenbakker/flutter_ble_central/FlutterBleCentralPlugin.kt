@@ -69,7 +69,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler {
   private fun startScan(call: MethodCall, result: MethodChannel.Result) {
     val scanSettings = ScanSettings.Builder()
     scanSettings.setScanMode(SCAN_MODE_LOW_LATENCY)
-//    scanSettings.setLegacy()
     flutterBleCentralManager?.startScan(scanSettings.build(), result)
   }
 
