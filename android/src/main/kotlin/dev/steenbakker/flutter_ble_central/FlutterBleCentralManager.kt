@@ -5,9 +5,15 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.Context
 import android.os.Build
+import android.os.ParcelUuid
 import android.util.Log
+import android.util.SparseArray
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResultHandler) {
 
@@ -24,9 +30,7 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
       mBluetoothManager = bluetoothManager
 
       val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
-      //&& !bluetoothAdapter.isMultipleAdvertisementSupported
       if (bluetoothAdapter.bluetoothLeScanner == null) {
-        //disabled
 //        throw PeripheralException(PeripheralState.unsupported)
       } else {
         mBluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
@@ -35,20 +39,6 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
   }
 
   fun startScan(scanSettings: ScanSettings, result: MethodChannel.Result) {
-    try {
-//      allowDuplicates = scanSettings
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        startScan21(scanSettings)
-      } else {
-//        startScan18(settings)
-      }
-      result.success(null)
-    } catch (e: Exception) {
-      result.error("startScan", e.message, e)
-    }
-  }
-
-  private fun startScan21(scanSettings: ScanSettings) {
 //    val scanner = mBluetoothAdapter!!.bluetoothLeScanner
 //            ?: throw IllegalStateException("getBluetoothLeScanner() is null. Is the Adapter on?")
 //    val scanMode: Int = scanSettings.scanMode
@@ -59,39 +49,52 @@ class FlutterBleCentralManager(context: Context, val scanResultHandler: ScanResu
 //      val f = ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString(uuid)).build()
 //      filters.add(f)
 //    }
-    mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
+//    startDuplicateDetection()
+    try {
+      mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback )
+    result.success(null)
+    } catch (e: Exception) {
+      result.error("startScan", e.message, e)
+    }
   }
 
   fun stopScan() {
+    stopDuplicateDetection()
     mBluetoothLeScanner?.stopScan(scanCallback)
   }
 
-  var i = 0
+  private val scope = MainScope() // could also use an other scope such as viewModelScope if available
+  var job: Job? = null
+
+  // TODO: Check if duplicate detection is neccessary
+  private fun startDuplicateDetection() {
+    stopDuplicateDetection()
+    job = scope.launch {
+      while(true) {
+        byteArray.clear()
+        delay(5000)
+      }
+    }
+  }
+
+  val byteArray = mutableListOf<ByteArray>()
+
+  private fun stopDuplicateDetection() {
+    job?.cancel()
+    job = null
+  }
 
   private val scanCallback = object : ScanCallback() {
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       super.onScanResult(callbackType, result)
-      i++
-//      Log.d("BLE", "REAL RECEIVED $i")
+      scanResultHandler.ii++
+//      byteArray.add(manuData)
       scanResultHandler.publishScanResult(result)
 
-
-//      if (!allowDuplicates && result.device != null && result.device.address != null) {
-//        if (macDeviceScanned.contains(result.device.address)) {
-//          return
-//        }
-//        macDeviceScanned.add(result.device.address)
-//      }
-//      val scanResult: Protos.ScanResult = ProtoMaker.from(result.device, result)
-//      invokeMethodUIThread("ScanResult", scanResult.toByteArray())
     }
 
     override fun onBatchScanResults(results: List<ScanResult>) {
       super.onBatchScanResults(results)
-    }
-
-    override fun onScanFailed(errorCode: Int) {
-      super.onScanFailed(errorCode)
     }
   }
 }

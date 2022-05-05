@@ -28,6 +28,10 @@ class ScanResult {
 
   final int? timestampNanos;
 
+  final bool? connectable;
+
+  final int? queue;
+
   ScanResult({
     this.device,
     this.eventType,
@@ -39,6 +43,8 @@ class ScanResult {
     this.periodicAdvertisingInterval,
     this.scanRecord,
     this.timestampNanos,
+    this.connectable,
+    this.queue,
   });
 
   factory ScanResult.fromJson(Map<String, dynamic> json) =>

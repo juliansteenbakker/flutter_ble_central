@@ -79,19 +79,38 @@ class FlutterBleCentral {
     return _scanResult!;
   }
 
+  /// Returns Stream of MTU updates.
+  Stream<dynamic> get onRawScanResult {
+    return _scanResultEventChannel.receiveBroadcastStream();
+  }
+
+  /// Parses the received data.
   void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
     if (Platform.isIOS || Platform.isMacOS) {
-      data as Map<String, dynamic>;
-      final Uint8List manu = data["manufacturerSpecificData"] as Uint8List;
-      if (manu.length < 3) return;
-      final Map<String, dynamic> manufacturerSpecificData = {
-        "${manu[0] | manu[1] << 8}": manu.skip(2).toList()
-      };
+      data as Map<dynamic, dynamic>;
+
+      final Uint8List manufacturerIdAndData =
+          data["manufacturerSpecificData"] as Uint8List;
+      Map<String, dynamic> manufacturerSpecificData = {};
+
+      // Check that both manufacturerID AND data is present
+      if (manufacturerIdAndData.length >= 3) {
+        manufacturerSpecificData = {
+          "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
+              manufacturerIdAndData.skip(2).toList()
+        };
+      }
+
       final Map<String, dynamic> scanRecord = {
-        'manufacturerSpecificData': manufacturerSpecificData
+        'deviceName': data['deviceName'],
+        'manufacturerSpecificData': manufacturerSpecificData,
+        'serviceData': data['serviceData'],
+        'serviceUuids': data['serviceUuids'],
       };
+
       data['scanRecord'] = scanRecord;
+      data['device'] = {'address': data['address']};
 
       result = ScanResult.fromJson(Map<String, dynamic>.from(data));
     } else {
