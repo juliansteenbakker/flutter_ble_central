@@ -15,6 +15,11 @@ import var CoreBluetooth.CBAdvertisementDataServiceDataKey
 import var CoreBluetooth.CBAdvertisementDataServiceUUIDsKey
 import var CoreBluetooth.CBAdvertisementDataManufacturerDataKey
 import var CoreBluetooth.CBAdvertisementDataLocalNameKey
+import var CoreBluetooth.CBAdvertisementDataOverflowServiceUUIDsKey
+import var CoreBluetooth.CBAdvertisementDataTxPowerLevelKey
+import var CoreBluetooth.CBAdvertisementDataIsConnectable
+import var CoreBluetooth.CBAdvertisementDataSolicitedServiceUUIDsKey
+import CoreBluetooth
 
 public class ScanResultHandler: NSObject, FlutterStreamHandler {
     
@@ -29,26 +34,48 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
         eventChannel.setStreamHandler(self)
     }
     
-    func publishScanResult(advertiseData: AdvertisementData, rssi: Int) {
+    func publishScanResult(advertiseData: AdvertisementData, rssi: Int, peripheral: CBPeripheral) {
+//        let num = advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber
+//        var connectable = false
+//        if num != nil {
+//            connectable = num!.boolValue
+//        }
+        
         if let eventSink = self.eventSink {
-            let serviceData = advertiseData[CBAdvertisementDataServiceDataKey] as? ServiceData ?? [:]
-            let serviceUuids = advertiseData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+            let localName = advertiseData[CBAdvertisementDataLocalNameKey] as? String
             let manufacturerData = advertiseData[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data();
-//            let name = advertiseData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name ?? String();
+            let serviceData = advertiseData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
+            
+            let txPowerLevel = advertiseData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber
+            let isConnectable = advertiseData[CBAdvertisementDataIsConnectable] as? Bool
+            
+            
+            let serviceUUIDs = (advertiseData[CBAdvertisementDataServiceUUIDsKey] as? [AnyObject])?.map({ CBUUID in
+                CBUUID.uuidString
+            })
+            
+            let overflowServiceUUIDs = (advertiseData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID])?.map({ CBUUID in
+                CBUUID.uuidString
+            })
+            
+            let solicitedServiceUUIDs = (advertiseData[CBAdvertisementDataSolicitedServiceUUIDsKey] as? [CBUUID])?.map({ CBUUID in
+                CBUUID.uuidString
+            })
             
             let deviceDiscoveryMessage = [
-//                "id": peripheral.identifier.uuidString,
-//                $0.name = name
-                "rssi": Int32(rssi),
-                "serviceData": serviceData
-                    .map { entry in
-                        [entry.key.data: entry.value]
-                    },
-                "serviceUuids": serviceUuids.map { entry in
-                    [entry.data]
-                },
-                "manufacturerSpecificData": manufacturerData
+                "deviceName": localName,
+                "manufacturerSpecificData": manufacturerData,
+//                "serviceData": serviceData.map(),
+                "serviceUuids": serviceUUIDs,
+                "overflowServiceUUIDs": overflowServiceUUIDs,
+//                "txPower": Int32(txPowerLevel),
+                "connectable": isConnectable,
+                "serviceSolicitationUuids": solicitedServiceUUIDs,
+                "address": peripheral.identifier.uuidString,
+                "rssi": Int32(rssi)
+//                "connectable": connectable
             ] as [String : Any]
+            
             eventSink(deviceDiscoveryMessage)
         }
     }

@@ -49,7 +49,7 @@ final class FlutterBleCentralManager {
                 stateChangedHandler.publishPeripheralState(state: state)
             },
             onDiscovery: {(CBPeripheral, AdvertisementData, RSSI) in
-                scanResultHandler.publishScanResult(advertiseData: AdvertisementData, rssi: 3)
+                scanResultHandler.publishScanResult(advertiseData: AdvertisementData, rssi: RSSI, peripheral: CBPeripheral)
             }
         )
         

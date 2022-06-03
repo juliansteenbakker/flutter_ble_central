@@ -1,3 +1,7 @@
+## 0.0.3
+
+Fixed macOS device address.
+
 ## 0.0.2
 
 Fixed serviceUUIDs not being found on android and iOS.
