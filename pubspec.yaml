@@ -16,7 +16,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   json_serializable: ^5.0.0
-  lint: ^1.8.2
+  lint: ^1.10.0
 
 flutter:
   plugin:
