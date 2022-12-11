@@ -52,7 +52,6 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
 
 
         scanRecordMap["serviceData"] = scanResult.scanRecord?.serviceData
-//                scanRecordMap["serviceSolicitationUuids"] = scanResult.scanRecord!!.serviceSolicitationUuids
         if (scanResult.scanRecord?.serviceUuids != null && scanResult.scanRecord!!.serviceUuids.isNotEmpty()) {
             val uuidList: MutableList<String> = mutableListOf()
             for (id in scanResult.scanRecord!!.serviceUuids) {
@@ -79,14 +78,6 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     }
 
     fun publishScanResult(scanResult: ScanResult) {
-//        val scanResultMap = scanResultToMap(scanResult)
-//        val json = JSONObject(scanResultMap)
-//        val string = json.toString()
-//                    Handler(Looper.getMainLooper()).post {
-//                eventSink?.success(string)
-//            }
-//        eventSink?.success(string)
-
         executeBtDeviceSending.execute {
             val scanResultMap = scanResultToMap(scanResult)
             val json = JSONObject(scanResultMap)
