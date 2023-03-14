@@ -28,3 +28,5 @@ flutter:
         pluginClass: FlutterBleCentralPlugin
       macos:
         pluginClass: FlutterBleCentralPlugin
+      windows:
+        pluginClass: FlutterBleCentralPluginCApi

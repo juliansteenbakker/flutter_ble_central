@@ -86,7 +86,7 @@ class FlutterBleCentral {
   /// Parses the received data.
   void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       data as Map<dynamic, dynamic>;
 
       final Uint8List manufacturerIdAndData =
