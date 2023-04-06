@@ -38,6 +38,8 @@ using namespace winrt::Windows::Devices::Bluetooth::Advertisement;
 using namespace winrt::Windows::Devices::Bluetooth::GenericAttributeProfile;
 using namespace winrt::Windows::Devices::Enumeration;
 
+using flutter::EncodableMap;
+using flutter::EncodableValue;
 
 
 class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHandler<flutter::EncodableValue> {
