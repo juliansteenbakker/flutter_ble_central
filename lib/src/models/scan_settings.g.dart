@@ -17,7 +17,7 @@ ScanSettings _$ScanSettingsFromJson(Map<String, dynamic> json) => ScanSettings(
 
 Map<String, dynamic> _$ScanSettingsToJson(ScanSettings instance) =>
     <String, dynamic>{
-      'scanMode': _$ScanModeEnumMap[instance.scanMode]!,
+      'scanMode': _$ScanModeEnumMap[instance.scanMode],
       'reportDelay': instance.reportDelay,
       'numOfMatches': instance.numOfMatches,
       'legacyMode': instance.legacyMode,

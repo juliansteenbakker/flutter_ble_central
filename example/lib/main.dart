@@ -120,15 +120,15 @@ class _MyAppState extends State<MyApp> {
                     FlutterBleCentral().start(
                         scanSettings: ScanSettings(
                       scanMode: ScanMode.scanModeLowLatency,
-                    ));
+                    ),);
                     await Future.delayed(const Duration(
                       seconds: 30,
-                    ));
+                    ),);
                     FlutterBleCentral().stop();
                     isScanning = false;
                   }
                 },
-                child: const Text('30 Seconds Test')),
+                child: const Text('30 Seconds Test'),),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
               shrinkWrap: true,
