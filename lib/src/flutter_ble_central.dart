@@ -9,7 +9,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_ble_central/src/models/enums/android_error.dart';
 import 'package:flutter_ble_central/src/models/enums/central_state.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
 import 'package:flutter_ble_central/src/models/scan_settings.dart';
@@ -55,11 +54,7 @@ class FlutterBleCentral {
   Future<void> start({
   ScanSettings? scanSettings,
 }) async {
-    final Map<String, dynamic> parameters = {};
-    if (scanSettings != null) {
-      parameters['scanMode'] = scanSettings.scanMode.index;
-    }
-    return _methodChannel.invokeMethod('start', parameters);
+    return _methodChannel.invokeMethod('start', scanSettings?.toJson());
   }
 
   /// Stop advertising
@@ -97,14 +92,13 @@ class FlutterBleCentral {
   }
 
   /// Returns Stream of MTU updates.
-  Stream<int> get onScanError {
+  Stream<int>? get onScanError {
+    if (!Platform.isAndroid) return null;
     _scanResultTransformer ??=
         StreamTransformer.fromHandlers(handleData: handleData);
-    _scanError ??= _scanResultEventChannel
+    return _scanError ??= _scanErrorEventChannel
         .receiveBroadcastStream()
         .map((dynamic event) => event as int);
-
-    return _scanError!;
   }
 
   /// Returns Stream of state.

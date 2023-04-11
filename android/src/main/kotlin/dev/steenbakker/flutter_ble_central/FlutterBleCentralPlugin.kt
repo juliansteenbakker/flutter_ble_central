@@ -1,6 +1,6 @@
 package dev.steenbakker.flutter_ble_central
 
-import ScanResultCallback
+import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
 import android.Manifest
 import android.app.Activity
 import android.bluetooth.le.ScanSettings
@@ -58,7 +58,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     if (call.method == "start" || call.method == "stop") {
       val state = checkBluetoothState(true)
       if (state != null) {
-//        stateChangedHandler.publishPeripheralState(state)
         result.error(state.value.toString(), state.name, "startAdvertising")
         return
       }
@@ -85,7 +84,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
     val scanSettings = ScanSettings.Builder()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      (arguments["legacy"] as Boolean?)?.let { scanSettings.setLegacy((arguments["legacy"] as Boolean)) }
+      (arguments["legacyMode"] as Boolean?)?.let { scanSettings.setLegacy((arguments["legacyMode"] as Boolean)) }
       (arguments["phy"] as Int?)?.let { scanSettings.setPhy((arguments["phy"] as Int)) }
     }
 
@@ -95,10 +94,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       (arguments["numOfMatches"] as Int?)?.let { scanSettings.setNumOfMatches((arguments["numOfMatches"] as Int)) }
     }
 
-    (arguments["reportDelayMillis"] as Long?)?.let { scanSettings.setReportDelay((arguments["reportDelayMillis"] as Long)) }
+    (arguments["reportDelay"] as Int?)?.let { scanSettings.setReportDelay((arguments["reportDelay"] as Int).toLong()) }
     (arguments["scanMode"] as Int?)?.let { scanSettings.setScanMode((arguments["scanMode"] as Int)) }
 
-    scanCallback = ScanResultCallback(stateChangedHandler, scanResultHandler, scanErrorHandler)
+    scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
     flutterBleCentralManager?.startScan(scanSettings.build(), result, scanCallback!!)
   }
 

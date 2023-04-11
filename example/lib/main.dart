@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +17,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   Map<String, ScanResult> devices = {};
   bool isScanning = false;
-  int i = 0;
+  int packetsFound = 0;
   int? queue = 0;
 
   @override
@@ -26,34 +25,48 @@ class _MyAppState extends State<MyApp> {
     super.initState();
 
     Timer.periodic(const Duration(seconds: 1), (timer) {
-      debugPrint('Packets found: $i, in queue $queue');
+      setState(() {
+        debugPrint('Packets found: $packetsFound, in queue $queue');
+      });
+    });
+
+    FlutterBleCentral().onScanError?.listen((event) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: ${AndroidError.values[event]}, code: $event',
+          ),
+        ),
+      );
+      debugPrint('Error: ${AndroidError.values[event]}, code: $event');
     });
 
     FlutterBleCentral().onScanResult.listen((event) {
-      i++;
+      packetsFound++;
     });
   }
 
   Future<void> _requestPermissions() async {
-    final Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.location,
-    ].request();
-    for (final status in statuses.keys) {
-      if (statuses[status] == PermissionStatus.granted) {
-        debugPrint('$status permission granted');
-      } else if (statuses[status] == PermissionStatus.denied) {
-        debugPrint(
-          '$status denied. Show a dialog with a reason and again ask for the permission.',
-        );
-      } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
-        debugPrint(
-          '$status permanently denied. Take the user to the settings page.',
-        );
-      }
-    }
+
+    // final Map<Permission, PermissionStatus> statuses = await [
+    //   Permission.bluetooth,
+    //   Permission.bluetoothConnect,
+    //   Permission.bluetoothScan,
+    //   Permission.location,
+    // ].request();
+    // for (final status in statuses.keys) {
+    //   if (statuses[status] == PermissionStatus.granted) {
+    //     debugPrint('$status permission granted');
+    //   } else if (statuses[status] == PermissionStatus.denied) {
+    //     debugPrint(
+    //       '$status denied. Show a dialog with a reason and again ask for the permission.',
+    //     );
+    //   } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
+    //     debugPrint(
+    //       '$status permanently denied. Take the user to the settings page.',
+    //     );
+    //   }
+    // }
   }
 
   @override
@@ -63,6 +76,12 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Flutter BLE Central example'),
           actions: <Widget>[
+            IconButton(
+              onPressed: () => setState(() {
+                packetsFound = 0;
+              }),
+              icon: const Icon(Icons.lock_reset),
+            ),
             IconButton(
               onPressed: _requestPermissions,
               icon: const Icon(Icons.security),
@@ -88,40 +107,57 @@ class _MyAppState extends State<MyApp> {
               )
           ],
         ),
-        body: devices.isEmpty
-            ? const Center(
-                child: CircularProgressIndicator(),
-                // child: Text('No device'),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemBuilder: (BuildContext context, int index) {
-                  final scanResult = devices.values.elementAt(index);
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: <Widget>[
-                          const Icon(Icons.bluetooth),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                // Text(s),
-                                Text('${scanResult.scanRecord?.deviceName}'),
-                                Text('${scanResult.device?.address}'),
-                                Text('RSSI: ${scanResult.rssi}'),
-                              ],
-                            ),
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(onPressed: () async {
+              if (isScanning) {
+                FlutterBleCentral().stop();
+                isScanning = false;
+              } else {
+                isScanning = true;
+                devices.clear();
+                FlutterBleCentral().start(scanSettings: ScanSettings(
+                  scanMode: ScanMode.scanModeLowLatency,
+                ));
+                await Future.delayed(const Duration(seconds: 30,));
+                FlutterBleCentral().stop();
+                isScanning = false;
+              }
+            }, child: const Text('30 Seconds Test')),
+            Text('Packets found: $packetsFound, in queue $queue'),
+            ListView.separated(
+                shrinkWrap: true,
+                    padding: const EdgeInsets.all(8),
+                    itemBuilder: (BuildContext context, int index) {
+                      final scanResult = devices.values.elementAt(index);
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            children: <Widget>[
+                              const Icon(Icons.bluetooth),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    // Text(s),
+                                    Text('${scanResult.scanRecord?.deviceName}'),
+                                    Text('${scanResult.device?.address}'),
+                                    Text('RSSI: ${scanResult.rssi}'),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                separatorBuilder: (context, index) => const SizedBox(height: 5),
-                itemCount: devices.length,
-              ),
+                        ),
+                      );
+                    },
+                    separatorBuilder: (context, index) => const SizedBox(height: 5),
+                    itemCount: devices.length,
+                  ),
+          ],
+        ),
       ),
     );
   }

@@ -40,8 +40,6 @@ final class FlutterBleCentralManager {
     init(
         scanResultHandler: ScanResultHandler,
         stateChangedHandler: StateChangedHandler
-//        onStateChange: @escaping StateChangeHandler,
-//        onDiscovery: @escaping DiscoveryHandler
     ) {
         
         self.centralManagerDelegate = CentralManagerDelegate(
@@ -57,28 +55,6 @@ final class FlutterBleCentralManager {
             delegate:self.centralManagerDelegate,
             queue: nil
         )
-        
-//        if #available(iOS 10.0, *) {
-//
-//
-//            self.centralManager = CBCentralManager(
-//                delegate:self.centralManagerDelegate,
-//                queue: nil
-//            )
-//
-//        } else {
-//            self.centralManager = CBCentralManager(
-//                delegate: LegacyCentralManagerDelegate(
-//                    onStateChange: { state in
-//                        stateChangedHandler.publishLegacyPeripheralState(state: state)
-//                    },
-//                    onDiscovery: {CBPeripheral, AdvertisementData, RSSI in
-//                        scanResultHandler.publishScanResult(advertiseData: AdvertisementData, rssi: 3)
-//                    }
-//                ),
-//                queue: nil
-//            )
-//        }
         
     }
 
@@ -100,7 +76,7 @@ final class FlutterBleCentralManager {
 
     private enum Failure: Error, CustomStringConvertible {
 
-        case notPoweredOn(actualState: CBCentralManagerState)
+        case notPoweredOn(actualState: CBManagerState)
         case peripheralIsUnknown(PeripheralID)
         case peripheralIsNotConnected(PeripheralID)
         case serviceNotFound(ServiceID, PeripheralID)
