@@ -52,8 +52,8 @@ class FlutterBleCentral {
 
   /// Start advertising. Takes [AdvertiseData] as an input.
   Future<void> start({
-  ScanSettings? scanSettings,
-}) async {
+    ScanSettings? scanSettings,
+  }) async {
     return _methodChannel.invokeMethod('start', scanSettings?.toJson());
   }
 
@@ -81,7 +81,8 @@ class FlutterBleCentral {
   }
 
   Future<bool> requestPermission() async {
-    return await _methodChannel.invokeMethod<bool>('requestPermissions') ?? false;
+    return await _methodChannel.invokeMethod<bool>('requestPermissions') ??
+        false;
   }
 
   Future<bool> hasPermission() async {

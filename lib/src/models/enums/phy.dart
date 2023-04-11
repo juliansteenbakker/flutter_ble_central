@@ -6,7 +6,6 @@ import 'package:json_annotation/json_annotation.dart';
 /// LE Coded phy is supported by calling BluetoothAdapter.isLeCodedPhySupported().
 /// Selecting an unsupported phy will result in failure to start scan.
 
-
 enum Phy {
   @JsonValue(1)
   phyLe1M,

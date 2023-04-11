@@ -47,7 +47,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _requestPermissions() async {
-
     // final Map<Permission, PermissionStatus> statuses = await [
     //   Permission.bluetooth,
     //   Permission.bluetoothConnect,
@@ -110,52 +109,57 @@ class _MyAppState extends State<MyApp> {
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ElevatedButton(onPressed: () async {
-              if (isScanning) {
-                FlutterBleCentral().stop();
-                isScanning = false;
-              } else {
-                isScanning = true;
-                devices.clear();
-                FlutterBleCentral().start(scanSettings: ScanSettings(
-                  scanMode: ScanMode.scanModeLowLatency,
-                ));
-                await Future.delayed(const Duration(seconds: 30,));
-                FlutterBleCentral().stop();
-                isScanning = false;
-              }
-            }, child: const Text('30 Seconds Test')),
+            ElevatedButton(
+                onPressed: () async {
+                  if (isScanning) {
+                    FlutterBleCentral().stop();
+                    isScanning = false;
+                  } else {
+                    isScanning = true;
+                    devices.clear();
+                    FlutterBleCentral().start(
+                        scanSettings: ScanSettings(
+                      scanMode: ScanMode.scanModeLowLatency,
+                    ));
+                    await Future.delayed(const Duration(
+                      seconds: 30,
+                    ));
+                    FlutterBleCentral().stop();
+                    isScanning = false;
+                  }
+                },
+                child: const Text('30 Seconds Test')),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
-                shrinkWrap: true,
-                    padding: const EdgeInsets.all(8),
-                    itemBuilder: (BuildContext context, int index) {
-                      final scanResult = devices.values.elementAt(index);
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Row(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(8),
+              itemBuilder: (BuildContext context, int index) {
+                final scanResult = devices.values.elementAt(index);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(Icons.bluetooth),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              const Icon(Icons.bluetooth),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    // Text(s),
-                                    Text('${scanResult.scanRecord?.deviceName}'),
-                                    Text('${scanResult.device?.address}'),
-                                    Text('RSSI: ${scanResult.rssi}'),
-                                  ],
-                                ),
-                              ),
+                              // Text(s),
+                              Text('${scanResult.scanRecord?.deviceName}'),
+                              Text('${scanResult.device?.address}'),
+                              Text('RSSI: ${scanResult.rssi}'),
                             ],
                           ),
                         ),
-                      );
-                    },
-                    separatorBuilder: (context, index) => const SizedBox(height: 5),
-                    itemCount: devices.length,
+                      ],
+                    ),
                   ),
+                );
+              },
+              separatorBuilder: (context, index) => const SizedBox(height: 5),
+              itemCount: devices.length,
+            ),
           ],
         ),
       ),

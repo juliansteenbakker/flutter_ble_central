@@ -7,7 +7,6 @@
 import 'package:json_annotation/json_annotation.dart';
 
 enum ScanMode {
-
   /// A special Bluetooth LE scan mode.
   /// Applications using this scan mode will passively listen for other scan results without starting BLE scans themselves.
   @JsonValue(-1)
