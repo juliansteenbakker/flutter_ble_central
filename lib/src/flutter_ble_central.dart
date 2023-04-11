@@ -80,6 +80,14 @@ class FlutterBleCentral {
         false;
   }
 
+  Future<bool> requestPermission() async {
+    return await _methodChannel.invokeMethod<bool>('requestPermissions') ?? false;
+  }
+
+  Future<bool> hasPermission() async {
+    return await _methodChannel.invokeMethod<bool>('hasPermission') ?? false;
+  }
+
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
     _scanResultTransformer ??=

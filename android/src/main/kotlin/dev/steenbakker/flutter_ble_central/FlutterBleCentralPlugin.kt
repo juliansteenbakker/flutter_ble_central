@@ -44,7 +44,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     scanResultHandler = ScanResultHandler(flutterPluginBinding)
     scanErrorHandler = ScanErrorHandler(flutterPluginBinding)
     stateChangedHandler = StateChangedHandler(flutterPluginBinding)
-    flutterBleCentralManager = FlutterBleCentralManager(flutterPluginBinding.applicationContext, scanResultHandler, scanErrorHandler, stateChangedHandler)
+    flutterBleCentralManager = FlutterBleCentralManager(flutterPluginBinding.applicationContext)
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -56,7 +56,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       result.error("Not initialized", "FlutterBleCentral is not correctly initialized", null)
     }
     if (call.method == "start" || call.method == "stop") {
-      val state = checkBluetoothState(true)
+      val state = checkBluetoothState()
       if (state != null) {
         result.error(state.value.toString(), state.name, "startAdvertising")
         return
@@ -68,7 +68,13 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       "stop" -> stopScan(result)
       "isSupported" -> isSupported(result, context!!)
       "enableBluetooth" -> enableBluetooth(call, result)
-      "requestPermission" -> requestPermission(result)
+      "requestPermission" -> Handler(Looper.getMainLooper()).post {
+        flutterBleCentralManager!!.pendingResultForPermissionResult = result
+        flutterBleCentralManager!!.requestPermission(activityBinding!!)
+      }
+      "hasPermission" -> Handler(Looper.getMainLooper()).post {
+        result.success(flutterBleCentralManager!!.requestPermission(activityBinding!!))
+      }
       else -> Handler(Looper.getMainLooper()).post {
         result.notImplemented()
       }
@@ -116,15 +122,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     }
   }
 
-  private fun requestPermission(result: Result) {
-    val hasPermission = flutterBleCentralManager!!.requestPermission(activityBinding!!, true)
-
-    Handler(Looper.getMainLooper()).post {
-      result.success(hasPermission)
-    }
-  }
-
-  private fun checkBluetoothState(enable: Boolean): CentralState? {
+  private fun checkBluetoothState(): CentralState? {
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
       return CentralState.unsupported
     } else {
@@ -132,11 +130,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       // !bluetoothAdapter.isMultipleAdvertisementSupported
       flutterBleCentralManager!!.mBluetoothLeScanner = flutterBleCentralManager!!.mBluetoothManager!!.adapter.bluetoothLeScanner
       if (!flutterBleCentralManager!!.mBluetoothManager!!.adapter.isEnabled) {
-
-        if(enable) flutterBleCentralManager!!.enableBluetooth(null, null, activityBinding!!)
+        flutterBleCentralManager!!.enableBluetooth(true, null, activityBinding!!)
         return CentralState.poweredOff
       } else {
-        val hasPermission = flutterBleCentralManager!!.requestPermission(activityBinding!!, enable)
+        val hasPermission = flutterBleCentralManager!!.requestPermission(activityBinding!!)
         if (!hasPermission) return CentralState.unauthorized
       }
     }
@@ -145,16 +142,14 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   private fun enableBluetooth(call: MethodCall, result: Result) {
     if (activityBinding != null) {
-      this.call = call
-      this.pendingResultForPermission = result
+      this.shouldAsk = call.arguments as Boolean
       flutterBleCentralManager!!.checkAndEnableBluetooth(call, result, activityBinding!!)
     } else {
       result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
     }
   }
 
-  private var pendingResultForPermission: Result? = null
-  private var call: MethodCall? = null
+  private var shouldAsk: Boolean? = null
 
   override fun onRequestPermissionsResult(
     requestCode: Int,
@@ -162,20 +157,28 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     grantResults: IntArray
   ): Boolean {
     if (requestCode == FlutterBleCentralManager.REQUEST_PERMISSION_BT) {
+      var hasAllPermissions = true
       for (i in permissions.indices) {
         val permission = permissions[i]
         val grantResult = grantResults[i]
         if (permission == Manifest.permission.BLUETOOTH_CONNECT || permission == Manifest.permission.BLUETOOTH_ADVERTISE || permission == Manifest.permission.ACCESS_FINE_LOCATION || permission == Manifest.permission.ACCESS_COARSE_LOCATION) {
-          if (grantResult == PackageManager.PERMISSION_GRANTED) {
-            if (call != null && pendingResultForPermission != null && activityBinding != null) {
-              flutterBleCentralManager?.enableBluetooth(call!!, pendingResultForPermission!!, activityBinding!! )
-              return true
-            }
-
+          if (grantResult == PackageManager.PERMISSION_DENIED) {
+            hasAllPermissions = false
           }
         }
       }
+
+      if (hasAllPermissions) {
+        if (shouldAsk != null && activityBinding != null) {
+          flutterBleCentralManager?.enableBluetooth(true, flutterBleCentralManager?.pendingResultForPermissionResult!!, activityBinding!! )
+          return true
+        }
+      }
+
+      flutterBleCentralManager?.pendingResultForPermissionResult?.success(hasAllPermissions)
+      flutterBleCentralManager?.pendingResultForPermissionResult = null
     }
+
     return false
   }
 
@@ -184,26 +187,16 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     binding.addActivityResultListener { requestCode, resultCode, _ ->
       when (requestCode) {
         FlutterBleCentralManager.REQUEST_ENABLE_BT -> {
-
           if (flutterBleCentralManager?.pendingResultForActivityResult != null) {
             flutterBleCentralManager!!.pendingResultForActivityResult!!.success(resultCode == Activity.RESULT_OK)
-            flutterBleCentralManager?.pendingResultForActivityResult = null
           }
-          flutterBleCentralManager!!.intent = null
+          flutterBleCentralManager?.pendingResultForActivityResult = null
           return@addActivityResultListener true
         }
-//                REQUEST_DISCOVERABLE_BLUETOOTH -> {
-//                    pendingResultForActivityResult.success(if (resultCode === 0) -1 else resultCode)
-//                    return@addActivityResultListener true
-//                }
         else -> return@addActivityResultListener false
       }
     }
     activityBinding = binding
-    val initialState = checkBluetoothState(false)
-//    if (initialState != null) {
-//      stateChangedHandler.publishPeripheralState(initialState)
-//    }
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
