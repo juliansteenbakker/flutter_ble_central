@@ -110,25 +110,29 @@ class _MyAppState extends State<MyApp> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-                onPressed: () async {
-                  if (isScanning) {
-                    FlutterBleCentral().stop();
-                    isScanning = false;
-                  } else {
-                    isScanning = true;
-                    devices.clear();
-                    FlutterBleCentral().start(
-                        scanSettings: ScanSettings(
+              onPressed: () async {
+                if (isScanning) {
+                  FlutterBleCentral().stop();
+                  isScanning = false;
+                } else {
+                  isScanning = true;
+                  devices.clear();
+                  FlutterBleCentral().start(
+                    scanSettings: ScanSettings(
                       scanMode: ScanMode.scanModeLowLatency,
-                    ),);
-                    await Future.delayed(const Duration(
+                    ),
+                  );
+                  await Future.delayed(
+                    const Duration(
                       seconds: 30,
-                    ),);
-                    FlutterBleCentral().stop();
-                    isScanning = false;
-                  }
-                },
-                child: const Text('30 Seconds Test'),),
+                    ),
+                  );
+                  FlutterBleCentral().stop();
+                  isScanning = false;
+                }
+              },
+              child: const Text('30 Seconds Test'),
+            ),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
               shrinkWrap: true,
