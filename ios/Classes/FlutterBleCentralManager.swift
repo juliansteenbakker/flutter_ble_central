@@ -73,25 +73,36 @@ final class FlutterBleCentralManager {
         centralManager.stopScan()
         isScanning = false
     }
-
-    private enum Failure: Error, CustomStringConvertible {
-
-        case notPoweredOn(actualState: CBManagerState)
-        case peripheralIsUnknown(PeripheralID)
-        case peripheralIsNotConnected(PeripheralID)
-        case serviceNotFound(ServiceID, PeripheralID)
-
-        var description: String {
-            switch self {
-            case .notPoweredOn(let actualState):
-                return "Bluetooth is not powered on (the current state code is \(actualState.rawValue))"
-            case .peripheralIsUnknown(let peripheralID):
-                return "A peripheral \(peripheralID.uuidString) is unknown (make sure it has been discovered)"
-            case .peripheralIsNotConnected(let peripheralID):
-                return "The peripheral \(peripheralID.uuidString) is not connected"
-            case .serviceNotFound(let serviceID, let peripheralID):
-                return "A service \(serviceID) is not found in the peripheral \(peripheralID) (make sure it has been discovered)"
-            }
+    
+    var hasPermissions: Bool {
+        if #available(iOS 13.1, *) {
+            return CBCentralManager.authorization == .allowedAlways
+        } else if #available(iOS 13.0, *) {
+            return centralManager.authorization == .allowedAlways
         }
+        
+        // Before iOS 13, Bluetooth permissions are not required
+        return true
     }
+
+//    private enum Failure: Error, CustomStringConvertible {
+//
+//        case notPoweredOn(actualState: CBManagerState)
+//        case peripheralIsUnknown(PeripheralID)
+//        case peripheralIsNotConnected(PeripheralID)
+//        case serviceNotFound(ServiceID, PeripheralID)
+//
+//        var description: String {
+//            switch self {
+//            case .notPoweredOn(let actualState):
+//                return "Bluetooth is not powered on (the current state code is \(actualState.rawValue))"
+//            case .peripheralIsUnknown(let peripheralID):
+//                return "A peripheral \(peripheralID.uuidString) is unknown (make sure it has been discovered)"
+//            case .peripheralIsNotConnected(let peripheralID):
+//                return "The peripheral \(peripheralID.uuidString) is not connected"
+//            case .serviceNotFound(let serviceID, let peripheralID):
+//                return "A service \(serviceID) is not found in the peripheral \(peripheralID) (make sure it has been discovered)"
+//            }
+//        }
+//    }
 }

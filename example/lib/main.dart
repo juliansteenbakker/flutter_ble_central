@@ -47,37 +47,46 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _requestPermissions() async {
-    // final Map<Permission, PermissionStatus> statuses = await [
-    //   Permission.bluetooth,
-    //   Permission.bluetoothConnect,
-    //   Permission.bluetoothScan,
-    //   Permission.location,
-    // ].request();
-    // for (final status in statuses.keys) {
-    //   if (statuses[status] == PermissionStatus.granted) {
-    //     debugPrint('$status permission granted');
-    //   } else if (statuses[status] == PermissionStatus.denied) {
-    //     debugPrint(
-    //       '$status denied. Show a dialog with a reason and again ask for the permission.',
-    //     );
-    //   } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
-    //     debugPrint(
-    //       '$status permanently denied. Take the user to the settings page.',
-    //     );
-    //   }
-    // }
+    final hasPermission = await FlutterBleCentral().hasPermission();
+    switch (hasPermission) {
+      case BluetoothCentralState.denied:
+        _messangerKey.currentState?.showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              'We don\'t have permissions, requesting now!',
+            ),
+          ),
+        );
+
+        await _requestPermissions();
+        break;
+      default:
+        _messangerKey.currentState?.showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text(
+              'State: $hasPermission!',
+            ),
+          ),
+        );
+        break;
+    }
   }
+
+  final _messangerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: _messangerKey,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Flutter BLE Central example'),
           actions: <Widget>[
             IconButton(
               onPressed: () => setState(() {
-                packetsFound = 0;
+                FlutterBleCentral().stop();
               }),
               icon: const Icon(Icons.lock_reset),
             ),
@@ -96,12 +105,69 @@ class _MyAppState extends State<MyApp> {
             else
               IconButton(
                 icon: const Icon(Icons.play_arrow),
-                onPressed: () {
-                  setState(() {
-                    isScanning = true;
-                    devices.clear();
-                    FlutterBleCentral().start();
-                  });
+                onPressed: () async {
+                  final messenger = _messangerKey.currentState!;
+                  final state = await FlutterBleCentral().start();
+                  switch (state) {
+                    case BluetoothCentralState.ready:
+                    case BluetoothCentralState.granted:
+                      setState(() {
+                        isScanning = true;
+                        devices.clear();
+                      });
+                      break;
+                    case BluetoothCentralState.denied:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bluetooth denied, we can ask again!',
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.permanentlyDenied:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bluetooth denied, we can NOT ask again!',
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.restricted:
+                      // TODO: Handle this case.
+                      break;
+                    case BluetoothCentralState.limited:
+                      // TODO: Handle this case.
+                      break;
+                    case BluetoothCentralState.turnedOff:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Bluetooth turned off.'),
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.unsupported:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Bluetooth unsupported off.'),
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.unknown:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Unknown error..'),
+                          ),
+                        ),
+                      );
+                      break;
+                  }
                 },
               )
           ],
@@ -133,6 +199,8 @@ class _MyAppState extends State<MyApp> {
               },
               child: const Text('30 Seconds Test'),
             ),
+            ElevatedButton(onPressed: () => FlutterBleCentral().openBluetoothSettings(), child: Text('Bluetooth settings')),
+            ElevatedButton(onPressed: () => FlutterBleCentral().openAppSettings(), child: Text('App settings')),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
               shrinkWrap: true,
