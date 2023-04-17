@@ -9,7 +9,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_ble_central/src/models/enums/android_error.dart';
+import 'package:flutter_ble_central/src/models/enums/central_state.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
+import 'package:flutter_ble_central/src/models/scan_settings.dart';
 
 class FlutterBleCentral {
   /// Singleton instance
@@ -27,21 +30,36 @@ class FlutterBleCentral {
   final MethodChannel _methodChannel =
       const MethodChannel('dev.steenbakker.flutter_ble_central/method');
 
-  /// Event Channel for MTU state
+  /// Event Channel for Scan Result
   final EventChannel _scanResultEventChannel = const EventChannel(
     'dev.steenbakker.flutter_ble_central/scan_result',
+  );
+
+  /// Event Channel for Scan Error
+  final EventChannel _scanErrorEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/scan_error',
+  );
+
+  /// Event Channel used to changed state
+  final EventChannel _stateChangedEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/ble_state_changed',
   );
 
   Stream<ScanResult>? _scanResult;
   StreamTransformer<dynamic, ScanResult>? _scanResultTransformer;
 
-  //TODO Event Channel used to received data
-  // final EventChannel _dataReceivedEventChannel = const EventChannel(
-  //     'dev.steenbakker.flutter_ble_peripheral/ble_data_received');
+  Stream<int>? _scanError;
+  Stream<CentralState>? _centralState;
 
   /// Start advertising. Takes [AdvertiseData] as an input.
-  Future<void> start() async {
-    return _methodChannel.invokeMethod('start');
+  Future<void> start({
+  ScanSettings? scanSettings,
+}) async {
+    final Map<String, dynamic> parameters = {};
+    if (scanSettings != null) {
+      parameters['scanMode'] = scanSettings.scanMode.index;
+    }
+    return _methodChannel.invokeMethod('start', parameters);
   }
 
   /// Stop advertising
@@ -76,6 +94,27 @@ class FlutterBleCentral {
         .transform(_scanResultTransformer!);
 
     return _scanResult!;
+  }
+
+  /// Returns Stream of MTU updates.
+  Stream<int> get onScanError {
+    _scanResultTransformer ??=
+        StreamTransformer.fromHandlers(handleData: handleData);
+    _scanError ??= _scanResultEventChannel
+        .receiveBroadcastStream()
+        .map((dynamic event) => event as int);
+
+    return _scanError!;
+  }
+
+  /// Returns Stream of state.
+  ///
+  /// After listening to this Stream, you'll be notified about changes in peripheral state.
+  Stream<CentralState> get onPeripheralStateChanged {
+    _centralState ??= _stateChangedEventChannel
+        .receiveBroadcastStream()
+        .map((dynamic event) => CentralState.values[event as int]);
+    return _centralState!;
   }
 
   /// Returns Stream of MTU updates.
