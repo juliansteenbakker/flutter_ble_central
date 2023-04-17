@@ -27,6 +27,15 @@ public class SwiftFlutterBleCentralPlugin: NSObject, FlutterPlugin {
           startScan(result)
       case "stop":
           stopScan(result)
+      case "openAppSettings":
+          if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+             UIApplication.shared.open(settingsUrl)
+           }
+          result(nil)
+      case "hasPermission":
+          result(flutterBleCentralManager.hasPermissions)
+      case "requestPermissions":
+          result(flutterBleCentralManager.hasPermissions)
       default:
           result(FlutterMethodNotImplemented)
       }
@@ -34,11 +43,11 @@ public class SwiftFlutterBleCentralPlugin: NSObject, FlutterPlugin {
     
     private func startScan(_ result: @escaping FlutterResult) {
         flutterBleCentralManager.startScan(with: nil)
-        result(nil)
+        result(CentralState.Ready.rawValue)
     }
     
     private func stopScan(_ result: @escaping FlutterResult) {
         flutterBleCentralManager.stopScan()
-        result(nil)
+        result(CentralState.Ready.rawValue)
     }
 }

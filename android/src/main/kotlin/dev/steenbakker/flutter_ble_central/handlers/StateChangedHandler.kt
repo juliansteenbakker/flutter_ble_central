@@ -20,7 +20,7 @@ class StateChangedHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBindi
         eventChannel.setStreamHandler(this)
     }
 
-    fun publishCentralState(state: CentralState) {
+    private fun publishCentralState(state: CentralState) {
         this.state = state
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(state.ordinal)

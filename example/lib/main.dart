@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +17,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   Map<String, ScanResult> devices = {};
   bool isScanning = false;
-  int i = 0;
+  int packetsFound = 0;
   int? queue = 0;
 
   @override
@@ -26,43 +25,71 @@ class _MyAppState extends State<MyApp> {
     super.initState();
 
     Timer.periodic(const Duration(seconds: 1), (timer) {
-      debugPrint('Packets found: $i, in queue $queue');
+      setState(() {
+        debugPrint('Packets found: $packetsFound, in queue $queue');
+      });
+    });
+
+    FlutterBleCentral().onScanError?.listen((event) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: ${AndroidError.values[event]}, code: $event',
+          ),
+        ),
+      );
+      debugPrint('Error: ${AndroidError.values[event]}, code: $event');
     });
 
     FlutterBleCentral().onScanResult.listen((event) {
-      i++;
+      packetsFound++;
     });
   }
 
   Future<void> _requestPermissions() async {
-    final Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.location,
-    ].request();
-    for (final status in statuses.keys) {
-      if (statuses[status] == PermissionStatus.granted) {
-        debugPrint('$status permission granted');
-      } else if (statuses[status] == PermissionStatus.denied) {
-        debugPrint(
-          '$status denied. Show a dialog with a reason and again ask for the permission.',
+    final hasPermission = await FlutterBleCentral().hasPermission();
+    switch (hasPermission) {
+      case BluetoothCentralState.denied:
+        _messangerKey.currentState?.showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              'We don\'t have permissions, requesting now!',
+            ),
+          ),
         );
-      } else if (statuses[status] == PermissionStatus.permanentlyDenied) {
-        debugPrint(
-          '$status permanently denied. Take the user to the settings page.',
+
+        await _requestPermissions();
+        break;
+      default:
+        _messangerKey.currentState?.showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green,
+            content: Text(
+              'State: $hasPermission!',
+            ),
+          ),
         );
-      }
+        break;
     }
   }
+
+  final _messangerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: _messangerKey,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Flutter BLE Central example'),
           actions: <Widget>[
+            IconButton(
+              onPressed: () => setState(() {
+                FlutterBleCentral().stop();
+              }),
+              icon: const Icon(Icons.lock_reset),
+            ),
             IconButton(
               onPressed: _requestPermissions,
               icon: const Icon(Icons.security),
@@ -78,50 +105,135 @@ class _MyAppState extends State<MyApp> {
             else
               IconButton(
                 icon: const Icon(Icons.play_arrow),
-                onPressed: () {
-                  setState(() {
-                    isScanning = true;
-                    devices.clear();
-                    FlutterBleCentral().start();
-                  });
+                onPressed: () async {
+                  final messenger = _messangerKey.currentState!;
+                  final state = await FlutterBleCentral().start();
+                  switch (state) {
+                    case BluetoothCentralState.ready:
+                    case BluetoothCentralState.granted:
+                      setState(() {
+                        isScanning = true;
+                        devices.clear();
+                      });
+                      break;
+                    case BluetoothCentralState.denied:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bluetooth denied, we can ask again!',
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.permanentlyDenied:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bluetooth denied, we can NOT ask again!',
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.restricted:
+                      // TODO: Handle this case.
+                      break;
+                    case BluetoothCentralState.limited:
+                      // TODO: Handle this case.
+                      break;
+                    case BluetoothCentralState.turnedOff:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Bluetooth turned off.'),
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.unsupported:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Bluetooth unsupported off.'),
+                          ),
+                        ),
+                      );
+                      break;
+                    case BluetoothCentralState.unknown:
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            ('Unknown error..'),
+                          ),
+                        ),
+                      );
+                      break;
+                  }
                 },
               )
           ],
         ),
-        body: devices.isEmpty
-            ? const Center(
-                child: CircularProgressIndicator(),
-                // child: Text('No device'),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemBuilder: (BuildContext context, int index) {
-                  final scanResult = devices.values.elementAt(index);
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: <Widget>[
-                          const Icon(Icons.bluetooth),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                // Text(s),
-                                Text('${scanResult.scanRecord?.deviceName}'),
-                                Text('${scanResult.device?.address}'),
-                                Text('RSSI: ${scanResult.rssi}'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: () async {
+                if (isScanning) {
+                  FlutterBleCentral().stop();
+                  isScanning = false;
+                } else {
+                  isScanning = true;
+                  devices.clear();
+                  FlutterBleCentral().start(
+                    scanSettings: ScanSettings(
+                      scanMode: ScanMode.scanModeLowLatency,
                     ),
                   );
-                },
-                separatorBuilder: (context, index) => const SizedBox(height: 5),
-                itemCount: devices.length,
-              ),
+                  await Future.delayed(
+                    const Duration(
+                      seconds: 30,
+                    ),
+                  );
+                  FlutterBleCentral().stop();
+                  isScanning = false;
+                }
+              },
+              child: const Text('30 Seconds Test'),
+            ),
+            ElevatedButton(onPressed: () => FlutterBleCentral().openBluetoothSettings(), child: Text('Bluetooth settings')),
+            ElevatedButton(onPressed: () => FlutterBleCentral().openAppSettings(), child: Text('App settings')),
+            Text('Packets found: $packetsFound, in queue $queue'),
+            ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(8),
+              itemBuilder: (BuildContext context, int index) {
+                final scanResult = devices.values.elementAt(index);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(Icons.bluetooth),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              // Text(s),
+                              Text('${scanResult.scanRecord?.deviceName}'),
+                              Text('${scanResult.device?.address}'),
+                              Text('RSSI: ${scanResult.rssi}'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              separatorBuilder: (context, index) => const SizedBox(height: 5),
+              itemCount: devices.length,
+            ),
+          ],
+        ),
       ),
     );
   }

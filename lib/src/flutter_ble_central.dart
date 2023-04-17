@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_ble_central/src/models/enums/android_error.dart';
+import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
 import 'package:flutter_ble_central/src/models/enums/central_state.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
 import 'package:flutter_ble_central/src/models/scan_settings.dart';
@@ -52,19 +52,17 @@ class FlutterBleCentral {
   Stream<CentralState>? _centralState;
 
   /// Start advertising. Takes [AdvertiseData] as an input.
-  Future<void> start({
-  ScanSettings? scanSettings,
-}) async {
-    final Map<String, dynamic> parameters = {};
-    if (scanSettings != null) {
-      parameters['scanMode'] = scanSettings.scanMode.index;
-    }
-    return _methodChannel.invokeMethod('start', parameters);
+  Future<BluetoothCentralState> start({
+    ScanSettings? scanSettings,
+  }) async {
+    final response = await _methodChannel.invokeMethod<int>('start', (scanSettings ?? ScanSettings()).toJson());
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
 
   /// Stop advertising
-  Future<void> stop() async {
-    return _methodChannel.invokeMethod('stop');
+  Future<BluetoothCentralState> stop() async {
+    final response = await _methodChannel.invokeMethod<int>('stop');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
 
   /// Returns `true` if advertising or false if not advertising
@@ -85,6 +83,24 @@ class FlutterBleCentral {
         false;
   }
 
+  Future<BluetoothCentralState> requestPermission() async {
+    final response = await _methodChannel.invokeMethod<int>('requestPermissions');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+  }
+
+  Future<BluetoothCentralState> hasPermission() async {
+    final response = await _methodChannel.invokeMethod<int>('hasPermission');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+  }
+
+  Future<void> openBluetoothSettings() async {
+    await _methodChannel.invokeMethod('openBluetoothSettings');
+  }
+
+  Future<void> openAppSettings() async {
+    await _methodChannel.invokeMethod('openAppSettings');
+  }
+
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
     _scanResultTransformer ??=
@@ -97,14 +113,13 @@ class FlutterBleCentral {
   }
 
   /// Returns Stream of MTU updates.
-  Stream<int> get onScanError {
+  Stream<int>? get onScanError {
+    if (!Platform.isAndroid) return null;
     _scanResultTransformer ??=
         StreamTransformer.fromHandlers(handleData: handleData);
-    _scanError ??= _scanResultEventChannel
+    return _scanError ??= _scanErrorEventChannel
         .receiveBroadcastStream()
         .map((dynamic event) => event as int);
-
-    return _scanError!;
   }
 
   /// Returns Stream of state.
