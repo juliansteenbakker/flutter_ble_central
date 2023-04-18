@@ -55,12 +55,30 @@ class FlutterBleCentral {
   Future<BluetoothCentralState> start({
     ScanSettings? scanSettings,
   }) async {
+    if (Platform.isWindows) {
+      final response = await _methodChannel.invokeMethod<bool>('start', (scanSettings ?? ScanSettings()).toJson());
+      return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
+    }
     final response = await _methodChannel.invokeMethod<int>('start', (scanSettings ?? ScanSettings()).toJson());
     return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
 
   /// Stop advertising
   Future<BluetoothCentralState> stop() async {
+    if (Platform.isWindows) {
+      final response = await _methodChannel.invokeMethod<bool>('stop');
+      return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
+    }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
