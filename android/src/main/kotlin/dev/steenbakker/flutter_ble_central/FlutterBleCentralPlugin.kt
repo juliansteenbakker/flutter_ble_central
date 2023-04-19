@@ -56,6 +56,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   }
 
   var startStopCall: MethodCall? = null
+  var startStopResult: Result? = null
 
   override fun onMethodCall(call: MethodCall, result: Result) {
     if (flutterBleCentralManager == null || context == null) {
@@ -63,6 +64,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     }
     if (call.method == "start" || call.method == "stop") {
       startStopCall = call
+      startStopResult = result
       val state = checkBluetoothState(result)
       if (state != State.Ready) {
         return
@@ -139,6 +141,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
       result.success(State.Unsupported.ordinal)
       startStopCall = null
+      startStopResult = null
       return State.Unsupported
     } else {
       // Can't check whether ble is turned off or not supported, see https://stackoverflow.com/questions/32092902/why-ismultipleadvertisementsupported-returns-false-when-getbluetoothleadverti
@@ -192,7 +195,13 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
         flutterBleCentralManager!!.enableBluetooth(true, flutterBleCentralManager?.pendingResultForPermissionResult, activityBinding!!, true)
       } else {
         if (hasAllPermissions) {
-          flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Granted.ordinal)
+          if (startStopCall != null) {
+            onMethodCall(startStopCall!!, flutterBleCentralManager!!.pendingResultForPermissionResult!!)
+            startStopCall = null
+            flutterBleCentralManager?.pendingResultForPermissionResult = null
+          } else {
+            flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Granted.ordinal)
+          }
         } else {
           flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.PermanentlyDenied.ordinal)
         }
