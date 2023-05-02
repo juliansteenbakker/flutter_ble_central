@@ -62,7 +62,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     if (flutterBleCentralManager == null || context == null) {
       result.error("Not initialized", "FlutterBleCentral is not correctly initialized", null)
     }
-    if (call.method == "start" || call.method == "stop") {
+    if (call.method == "start") {
       startStopCall = call
       startStopResult = result
       val state = checkBluetoothState(result)
@@ -79,6 +79,9 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       "requestPermission" -> Handler(Looper.getMainLooper()).post {
         flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
       }
+//      "isScanning" -> Handler(Looper.getMainLooper()).post {
+//        result.success(flutterBleCentralManager!!.mBluetoothLeScanner?.)
+//      }
       "hasPermission" -> Handler(Looper.getMainLooper()).post {
         result.success(flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, null).ordinal)
       }
