@@ -56,7 +56,10 @@ class FlutterBleCentral {
     ScanSettings? scanSettings,
   }) async {
     if (Platform.isWindows) {
-      final response = await _methodChannel.invokeMethod<bool>('start', (scanSettings ?? ScanSettings()).toJson());
+      final response = await _methodChannel.invokeMethod<bool>(
+        'start',
+        (scanSettings ?? ScanSettings()).toJson(),
+      );
       return BluetoothCentralState.ready;
       if (response != null && response) {
         return BluetoothCentralState.ready;
@@ -64,8 +67,13 @@ class FlutterBleCentral {
         return BluetoothCentralState.denied;
       }
     }
-    final response = await _methodChannel.invokeMethod<int>('start', (scanSettings ?? ScanSettings()).toJson());
-    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+    final response = await _methodChannel.invokeMethod<int>(
+      'start',
+      (scanSettings ?? ScanSettings()).toJson(),
+    );
+    return response == null
+        ? BluetoothCentralState.unknown
+        : BluetoothCentralState.values[response];
   }
 
   /// Stop advertising
@@ -80,7 +88,9 @@ class FlutterBleCentral {
       }
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
-    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+    return response == null
+        ? BluetoothCentralState.unknown
+        : BluetoothCentralState.values[response];
   }
 
   /// Returns `true` if advertising or false if not advertising
@@ -102,13 +112,18 @@ class FlutterBleCentral {
   }
 
   Future<BluetoothCentralState> requestPermission() async {
-    final response = await _methodChannel.invokeMethod<int>('requestPermissions');
-    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+    final response =
+        await _methodChannel.invokeMethod<int>('requestPermissions');
+    return response == null
+        ? BluetoothCentralState.unknown
+        : BluetoothCentralState.values[response];
   }
 
   Future<BluetoothCentralState> hasPermission() async {
     final response = await _methodChannel.invokeMethod<int>('hasPermission');
-    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+    return response == null
+        ? BluetoothCentralState.unknown
+        : BluetoothCentralState.values[response];
   }
 
   Future<void> openBluetoothSettings() async {

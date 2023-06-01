@@ -54,7 +54,7 @@ class _MyAppState extends State<MyApp> {
           const SnackBar(
             backgroundColor: Colors.red,
             content: Text(
-              'We don\'t have permissions, requesting now!',
+              "We don't have permissions, requesting now!",
             ),
           ),
         );
@@ -144,7 +144,7 @@ class _MyAppState extends State<MyApp> {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text(
-                            ('Bluetooth turned off.'),
+                            'Bluetooth turned off.',
                           ),
                         ),
                       );
@@ -153,7 +153,7 @@ class _MyAppState extends State<MyApp> {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text(
-                            ('Bluetooth unsupported off.'),
+                            'Bluetooth unsupported off.',
                           ),
                         ),
                       );
@@ -162,7 +162,7 @@ class _MyAppState extends State<MyApp> {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text(
-                            ('Unknown error..'),
+                            'Unknown error..',
                           ),
                         ),
                       );
@@ -199,8 +199,14 @@ class _MyAppState extends State<MyApp> {
               },
               child: const Text('30 Seconds Test'),
             ),
-            ElevatedButton(onPressed: () => FlutterBleCentral().openBluetoothSettings(), child: Text('Bluetooth settings')),
-            ElevatedButton(onPressed: () => FlutterBleCentral().openAppSettings(), child: Text('App settings')),
+            ElevatedButton(
+              onPressed: () => FlutterBleCentral().openBluetoothSettings(),
+              child: const Text('Bluetooth settings'),
+            ),
+            ElevatedButton(
+              onPressed: () => FlutterBleCentral().openAppSettings(),
+              child: const Text('App settings'),
+            ),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
               shrinkWrap: true,
