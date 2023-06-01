@@ -9,7 +9,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
+import 'package:flutter_ble_central/src/models/enums/central_state.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
+import 'package:flutter_ble_central/src/models/scan_settings.dart';
 
 class FlutterBleCentral {
   /// Singleton instance
@@ -27,26 +30,57 @@ class FlutterBleCentral {
   final MethodChannel _methodChannel =
       const MethodChannel('dev.steenbakker.flutter_ble_central/method');
 
-  /// Event Channel for MTU state
+  /// Event Channel for Scan Result
   final EventChannel _scanResultEventChannel = const EventChannel(
     'dev.steenbakker.flutter_ble_central/scan_result',
+  );
+
+  /// Event Channel for Scan Error
+  final EventChannel _scanErrorEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/scan_error',
+  );
+
+  /// Event Channel used to changed state
+  final EventChannel _stateChangedEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/ble_state_changed',
   );
 
   Stream<ScanResult>? _scanResult;
   StreamTransformer<dynamic, ScanResult>? _scanResultTransformer;
 
-  //TODO Event Channel used to received data
-  // final EventChannel _dataReceivedEventChannel = const EventChannel(
-  //     'dev.steenbakker.flutter_ble_peripheral/ble_data_received');
+  Stream<int>? _scanError;
+  Stream<CentralState>? _centralState;
 
   /// Start advertising. Takes [AdvertiseData] as an input.
-  Future<void> start() async {
-    return _methodChannel.invokeMethod('start');
+  Future<BluetoothCentralState> start({
+    ScanSettings? scanSettings,
+  }) async {
+    if (Platform.isWindows) {
+      final response = await _methodChannel.invokeMethod<bool>('start', (scanSettings ?? ScanSettings()).toJson());
+      return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
+    }
+    final response = await _methodChannel.invokeMethod<int>('start', (scanSettings ?? ScanSettings()).toJson());
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
 
   /// Stop advertising
-  Future<void> stop() async {
-    return _methodChannel.invokeMethod('stop');
+  Future<BluetoothCentralState> stop() async {
+    if (Platform.isWindows) {
+      final response = await _methodChannel.invokeMethod<bool>('stop');
+      return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
+    }
+    final response = await _methodChannel.invokeMethod<int>('stop');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
   }
 
   /// Returns `true` if advertising or false if not advertising
@@ -67,6 +101,24 @@ class FlutterBleCentral {
         false;
   }
 
+  Future<BluetoothCentralState> requestPermission() async {
+    final response = await _methodChannel.invokeMethod<int>('requestPermissions');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+  }
+
+  Future<BluetoothCentralState> hasPermission() async {
+    final response = await _methodChannel.invokeMethod<int>('hasPermission');
+    return response == null ? BluetoothCentralState.unknown : BluetoothCentralState.values[response];
+  }
+
+  Future<void> openBluetoothSettings() async {
+    await _methodChannel.invokeMethod('openBluetoothSettings');
+  }
+
+  Future<void> openAppSettings() async {
+    await _methodChannel.invokeMethod('openAppSettings');
+  }
+
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
     _scanResultTransformer ??=
@@ -79,6 +131,26 @@ class FlutterBleCentral {
   }
 
   /// Returns Stream of MTU updates.
+  Stream<int>? get onScanError {
+    if (!Platform.isAndroid) return null;
+    _scanResultTransformer ??=
+        StreamTransformer.fromHandlers(handleData: handleData);
+    return _scanError ??= _scanErrorEventChannel
+        .receiveBroadcastStream()
+        .map((dynamic event) => event as int);
+  }
+
+  /// Returns Stream of state.
+  ///
+  /// After listening to this Stream, you'll be notified about changes in peripheral state.
+  Stream<CentralState> get onPeripheralStateChanged {
+    _centralState ??= _stateChangedEventChannel
+        .receiveBroadcastStream()
+        .map((dynamic event) => CentralState.values[event as int]);
+    return _centralState!;
+  }
+
+  /// Returns Stream of MTU updates.
   Stream<dynamic> get onRawScanResult {
     return _scanResultEventChannel.receiveBroadcastStream();
   }
@@ -86,7 +158,7 @@ class FlutterBleCentral {
   /// Parses the received data.
   void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       data as Map<dynamic, dynamic>;
 
       final Uint8List manufacturerIdAndData =

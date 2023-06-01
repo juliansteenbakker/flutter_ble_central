@@ -13,7 +13,7 @@ public class StateChangedHandler: NSObject, FlutterStreamHandler {
 
     private var eventSink: FlutterEventSink?
 
-    var legacyState: CBCentralManagerState = CBCentralManagerState.unknown
+    var legacyState: CBManagerState = CBManagerState.unknown
 
     private let eventChannel: FlutterEventChannel
 
@@ -24,14 +24,13 @@ public class StateChangedHandler: NSObject, FlutterStreamHandler {
         eventChannel.setStreamHandler(self)
     }
 
-    @available(iOS 10.0, *)
     func publishPeripheralState(state: CBManagerState) {
         if let eventSink = self.eventSink {
             eventSink(state.rawValue)
         }
     }
     
-    func publishLegacyPeripheralState(state: CBCentralManagerState) {
+    func publishLegacyPeripheralState(state: CBManagerState) {
         self.legacyState = state
         if let eventSink = self.eventSink {
             eventSink(state.rawValue)

@@ -1,79 +1,257 @@
 package dev.steenbakker.flutter_ble_central
 
+import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
+import android.Manifest
+import android.app.Activity
 import android.bluetooth.le.ScanSettings
-import android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED
-import android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import androidx.annotation.NonNull
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
-import io.flutter.Log
+import dev.steenbakker.flutter_ble_central.handlers.StateChangedHandler
+import dev.steenbakker.flutter_ble_central.models.State
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.PluginRegistry
 
 /** FlutterBleCentralPlugin */
-class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler {
-  /// The MethodChannel that will the communication between Flutter and native Android
-  ///
-  /// This local reference serves to register the plugin with the Flutter Engine and unregister it
-  /// when the Flutter Engine is detached from the Activity
-  private lateinit var channel : MethodChannel
+class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener {
+
+  private lateinit var methodChannel : MethodChannel
+  private lateinit var stateChangedHandler: StateChangedHandler
+  private lateinit var scanResultHandler: ScanResultHandler
+  private lateinit var scanErrorHandler: ScanErrorHandler
 
   private var flutterBleCentralManager: FlutterBleCentralManager? = null
+  private var context: Context? = null
+  private var activityBinding: ActivityPluginBinding? = null
+  private var scanCallback: ScanResultCallback? = null
 
-  private lateinit var scanResultHandler: ScanResultHandler
+  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+    methodChannel = MethodChannel(flutterPluginBinding.binaryMessenger, "dev.steenbakker.flutter_ble_central/method")
+    methodChannel.setMethodCallHandler(this)
 
-  override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "dev.steenbakker.flutter_ble_central/method")
-    channel.setMethodCallHandler(this)
-
+    context = flutterPluginBinding.applicationContext
     scanResultHandler = ScanResultHandler(flutterPluginBinding)
-
-    try {
-      flutterBleCentralManager = FlutterBleCentralManager(flutterPluginBinding.applicationContext, scanResultHandler)
-    } catch (e: Exception) {
-//      stateChangedHandler.publishPeripheralState(e.state)
-//      Log.e(tag, e.state.name)
-      return
-    }
+    scanErrorHandler = ScanErrorHandler(flutterPluginBinding)
+    stateChangedHandler = StateChangedHandler(flutterPluginBinding)
+    flutterBleCentralManager = FlutterBleCentralManager(flutterPluginBinding.applicationContext)
   }
 
-  override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-    if (flutterBleCentralManager == null) {
-      result.error("Not initialized", "FlutterBlePeripheral is not correctly initialized", "null")
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    methodChannel.setMethodCallHandler(null)
+  }
+
+  var startStopCall: MethodCall? = null
+  var startStopResult: Result? = null
+
+  override fun onMethodCall(call: MethodCall, result: Result) {
+    if (flutterBleCentralManager == null || context == null) {
+      result.error("Not initialized", "FlutterBleCentral is not correctly initialized", null)
     }
+    if (call.method == "start") {
+      startStopCall = call
+      startStopResult = result
+      val state = checkBluetoothState(result)
+      if (state != State.Ready) {
+        return
+      }
+    }
+
     when (call.method) {
       "start" -> startScan(call, result)
-      "stop" -> stopScan(call, result)
-//      "isAdvertising" -> Handler(Looper.getMainLooper()).post {
-//        result.success(flutterBlePeripheralManager?.isAdvertising())
+      "stop" -> stopScan(result)
+      "isSupported" -> isSupported(result, context!!)
+      "enableBluetooth" -> enableBluetooth(call, result)
+      "requestPermission" -> Handler(Looper.getMainLooper()).post {
+        flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
+      }
+//      "isScanning" -> Handler(Looper.getMainLooper()).post {
+//        result.success(flutterBleCentralManager!!.mBluetoothLeScanner?.)
 //      }
-//      "isSupported" -> isSupported(result, context!!)
-//      "isConnected" -> isConnected(result)
-//      "sendData" -> sendData(call, result)
-//      "enableBluetooth" -> enableBluetooth(call, result)
+      "hasPermission" -> Handler(Looper.getMainLooper()).post {
+        result.success(flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, null).ordinal)
+      }
+      "openAppSettings" -> Handler(Looper.getMainLooper()).post {
+        activityBinding!!.activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context!!.packageName, null)))
+        result.success(null)
+      }
+      "openBluetoothSettings" -> Handler(Looper.getMainLooper()).post {
+        activityBinding!!.activity.startActivity( Intent(Settings.ACTION_BLUETOOTH_SETTINGS), null)
+        result.success(null)
+      }
       else -> Handler(Looper.getMainLooper()).post {
         result.notImplemented()
       }
     }
   }
 
-  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-    channel.setMethodCallHandler(null)
-  }
+  private fun startScan(call: MethodCall, result: Result) {
+    if (call.arguments !is Map<*, *>) {
+      throw IllegalArgumentException("Arguments are not a map! " + call.arguments)
+    }
 
-  private fun startScan(call: MethodCall, result: MethodChannel.Result) {
+    val arguments = call.arguments as Map<*, *>
+
     val scanSettings = ScanSettings.Builder()
-    scanSettings.setScanMode(SCAN_MODE_LOW_LATENCY)
-    flutterBleCentralManager?.startScan(scanSettings.build(), result)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      (arguments["legacyMode"] as Boolean?)?.let { scanSettings.setLegacy((arguments["legacyMode"] as Boolean)) }
+      (arguments["phy"] as Int?)?.let { scanSettings.setPhy((arguments["phy"] as Int)) }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      (arguments["callbackType"] as Int?)?.let { scanSettings.setCallbackType((arguments["callbackType"] as Int)) }
+      (arguments["matchMode"] as Int?)?.let { scanSettings.setMatchMode((arguments["matchMode"] as Int)) }
+      (arguments["numOfMatches"] as Int?)?.let { scanSettings.setNumOfMatches((arguments["numOfMatches"] as Int)) }
+    }
+
+    (arguments["reportDelay"] as Int?)?.let { scanSettings.setReportDelay((arguments["reportDelay"] as Int).toLong()) }
+    (arguments["scanMode"] as Int?)?.let { scanSettings.setScanMode((arguments["scanMode"] as Int)) }
+
+    scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
+    flutterBleCentralManager?.startScan(scanSettings.build(), result, scanCallback!!)
   }
 
-  private fun stopScan(call: MethodCall, result: MethodChannel.Result) {
-    flutterBleCentralManager?.stopScan()
-    result.success(null)
+  private fun stopScan(result: Result) {
+    if (scanCallback != null) {
+      flutterBleCentralManager?.stopScan(scanCallback!!)
+    }
+    result.success(State.Ready.ordinal)
+  }
+
+  private fun isSupported(result: Result, context: Context) {
+    val isSupported = context.packageManager?.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
+
+    Handler(Looper.getMainLooper()).post {
+      result.success(isSupported)
+    }
+  }
+
+  private fun checkBluetoothState(result: Result): State {
+    if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
+      result.success(State.Unsupported.ordinal)
+      startStopCall = null
+      startStopResult = null
+      return State.Unsupported
+    } else {
+      // Can't check whether ble is turned off or not supported, see https://stackoverflow.com/questions/32092902/why-ismultipleadvertisementsupported-returns-false-when-getbluetoothleadverti
+      // !bluetoothAdapter.isMultipleAdvertisementSupported
+      flutterBleCentralManager!!.mBluetoothLeScanner = flutterBleCentralManager!!.mBluetoothManager!!.adapter.bluetoothLeScanner
+      val hasPermissions = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
+      if (hasPermissions == State.Granted) {
+        if (!flutterBleCentralManager!!.mBluetoothManager!!.adapter.isEnabled) {
+          flutterBleCentralManager!!.enableBluetooth(true, result, activityBinding!!, true)
+        } else {
+          return State.Ready
+        }
+      }
+      return hasPermissions
+    }
+  }
+
+  private fun enableBluetooth(call: MethodCall, result: Result) {
+    if (activityBinding != null) {
+      val isEnabled = flutterBleCentralManager!!.checkAndEnableBluetooth(call.arguments as Boolean, result, activityBinding!!)
+      result.success(isEnabled)
+    } else {
+      result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
+    }
+  }
+
+  override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+  ): Boolean {
+    if (requestCode == FlutterBleCentralManager.REQUEST_PERMISSION_BT) {
+      var hasAllPermissions = true
+      var shouldShowRationale = false
+      for (i in permissions.indices) {
+        val permission = permissions[i]
+        val grantResult = grantResults[i]
+        if (permission == Manifest.permission.BLUETOOTH_CONNECT || permission == Manifest.permission.BLUETOOTH_ADVERTISE || permission == Manifest.permission.ACCESS_FINE_LOCATION || permission == Manifest.permission.ACCESS_COARSE_LOCATION) {
+          if (grantResult == PackageManager.PERMISSION_DENIED) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(activityBinding!!.activity, permission)) {
+              shouldShowRationale = true
+            }
+            hasAllPermissions = false
+          }
+        }
+      }
+
+      if (shouldShowRationale) {
+        flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Denied.ordinal)
+      } else if (!flutterBleCentralManager!!.mBluetoothManager!!.adapter.isEnabled && startStopCall != null && hasAllPermissions) {
+        flutterBleCentralManager!!.enableBluetooth(true, flutterBleCentralManager?.pendingResultForPermissionResult, activityBinding!!, true)
+      } else {
+        if (hasAllPermissions) {
+          if (startStopCall != null) {
+            onMethodCall(startStopCall!!, flutterBleCentralManager!!.pendingResultForPermissionResult!!)
+            startStopCall = null
+            flutterBleCentralManager?.pendingResultForPermissionResult = null
+          } else {
+            flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Granted.ordinal)
+          }
+        } else {
+          flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.PermanentlyDenied.ordinal)
+        }
+        flutterBleCentralManager?.pendingResultForPermissionResult = null
+      }
+    }
+
+    return true
+  }
+
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    binding.addRequestPermissionsResultListener(this)
+    binding.addActivityResultListener { requestCode, resultCode, _ ->
+      when (requestCode) {
+        FlutterBleCentralManager.REQUEST_ENABLE_BT -> {
+          if (flutterBleCentralManager?.pendingResultForActivityResult != null) {
+            startStopCall = null
+            flutterBleCentralManager!!.pendingResultForActivityResult!!.success(resultCode == Activity.RESULT_OK)
+          } else if (flutterBleCentralManager?.pendingResultForPermissionResult != null) {
+           if (resultCode == Activity.RESULT_OK) {
+             if (startStopCall != null) {
+               onMethodCall(startStopCall!!, flutterBleCentralManager!!.pendingResultForPermissionResult!!)
+               startStopCall = null
+               flutterBleCentralManager?.pendingResultForPermissionResult = null
+             }
+           } else {
+             flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.TurnedOff.ordinal)
+           }
+          }
+          flutterBleCentralManager?.pendingResultForActivityResult = null
+          return@addActivityResultListener true
+        }
+        else -> return@addActivityResultListener false
+      }
+    }
+    activityBinding = binding
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() {
+    onDetachedFromActivity()
+  }
+
+  override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+    onAttachedToActivity(binding)
+  }
+
+  override fun onDetachedFromActivity() {
+    activityBinding = null
   }
 }
