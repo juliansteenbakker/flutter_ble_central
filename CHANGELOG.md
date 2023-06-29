@@ -1,3 +1,7 @@
+## 0.0.4
+
+Added windows support.
+
 ## 0.0.3
 
 Fixed macOS device address.
