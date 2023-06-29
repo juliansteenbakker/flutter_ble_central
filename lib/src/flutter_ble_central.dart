@@ -58,7 +58,9 @@ class FlutterBleCentral {
   }) async {
     if (Platform.isWindows) {
       final response = await _methodChannel.invokeMethod<bool>(
-          'start', (scanSettings ?? ScanSettings()).toJson(),);
+        'start',
+        (scanSettings ?? ScanSettings()).toJson(),
+      );
       // return BluetoothCentralState.ready;
       if (response != null && response) {
         return BluetoothCentralState.ready;
@@ -67,7 +69,9 @@ class FlutterBleCentral {
       }
     }
     final response = await _methodChannel.invokeMethod<int>(
-        'start', (scanSettings ?? ScanSettings()).toJson(),);
+      'start',
+      (scanSettings ?? ScanSettings()).toJson(),
+    );
     return response == null
         ? BluetoothCentralState.unknown
         : BluetoothCentralState.values[response];

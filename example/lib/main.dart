@@ -200,11 +200,13 @@ class _MyAppState extends State<MyApp> {
               child: const Text('30 Seconds Test'),
             ),
             ElevatedButton(
-                onPressed: () => FlutterBleCentral().openBluetoothSettings(),
-                child: const Text('Bluetooth settings'),),
+              onPressed: () => FlutterBleCentral().openBluetoothSettings(),
+              child: const Text('Bluetooth settings'),
+            ),
             ElevatedButton(
-                onPressed: () => FlutterBleCentral().openAppSettings(),
-                child: const Text('App settings'),),
+              onPressed: () => FlutterBleCentral().openAppSettings(),
+              child: const Text('App settings'),
+            ),
             Text('Packets found: $packetsFound, in queue $queue'),
             ListView.separated(
               shrinkWrap: true,
