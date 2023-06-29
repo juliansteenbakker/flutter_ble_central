@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
@@ -56,16 +57,16 @@ class FlutterBleCentral {
     ScanSettings? scanSettings,
   }) async {
     if (Platform.isWindows) {
-      await _methodChannel.invokeMethod<bool>(
+      final response = await _methodChannel.invokeMethod<bool>(
         'start',
         (scanSettings ?? ScanSettings()).toJson(),
       );
-      return BluetoothCentralState.ready;
-      // if (response != null && response) {
-      //   return BluetoothCentralState.ready;
-      // } else {
-      //   return BluetoothCentralState.denied;
-      // }
+      // return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
     }
     final response = await _methodChannel.invokeMethod<int>(
       'start',
@@ -79,13 +80,13 @@ class FlutterBleCentral {
   /// Stop advertising
   Future<BluetoothCentralState> stop() async {
     if (Platform.isWindows) {
-      await _methodChannel.invokeMethod<bool>('stop');
-      return BluetoothCentralState.ready;
-      // if (response != null && response) {
-      //   return BluetoothCentralState.ready;
-      // } else {
-      //   return BluetoothCentralState.denied;
-      // }
+      final response = await _methodChannel.invokeMethod<bool>('stop');
+      // return BluetoothCentralState.ready;
+      if (response != null && response) {
+        return BluetoothCentralState.ready;
+      } else {
+        return BluetoothCentralState.denied;
+      }
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null
@@ -176,8 +177,17 @@ class FlutterBleCentral {
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       data as Map<dynamic, dynamic>;
 
-      final Uint8List manufacturerIdAndData =
+      Uint8List manufacturerIdAndData =
           data["manufacturerSpecificData"] as Uint8List;
+
+      if (Platform.isWindows) {
+        final int manufacturerId = data["manufacturerId"] as int;
+        final b = BytesBuilder();
+        final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
+        b.add(l1);
+        b.add(manufacturerIdAndData);
+        manufacturerIdAndData = b.toBytes();
+      }
       Map<String, dynamic> manufacturerSpecificData = {};
 
       // Check that both manufacturerID AND data is present
