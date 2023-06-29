@@ -16,7 +16,6 @@ enum BluetoothCentralState {
   /// The user may still change the permission status in the settings.
   permanentlyDenied,
 
-
   /// The OS denied access to the requested feature.
   /// The user cannot change this app's status, possibly due to active restrictions such as parental controls being in place.
   ///
@@ -30,6 +29,7 @@ enum BluetoothCentralState {
   /// Bluetooth is turned off
   turnedOff,
   unsupported,
+
   /// The status is unknown
   unknown,
   ready,
