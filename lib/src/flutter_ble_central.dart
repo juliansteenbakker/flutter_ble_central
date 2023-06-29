@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
@@ -161,8 +162,18 @@ class FlutterBleCentral {
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       data as Map<dynamic, dynamic>;
 
-      final Uint8List manufacturerIdAndData =
+
+      Uint8List manufacturerIdAndData =
           data["manufacturerSpecificData"] as Uint8List;
+
+      if (Platform.isWindows) {
+        final int manufacturerId = data["manufacturerId"] as int;
+        final b = BytesBuilder();
+        final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
+        b.add(l1);
+        b.add(manufacturerIdAndData);
+        manufacturerIdAndData = b.toBytes();
+      }
       Map<String, dynamic> manufacturerSpecificData = {};
 
       // Check that both manufacturerID AND data is present

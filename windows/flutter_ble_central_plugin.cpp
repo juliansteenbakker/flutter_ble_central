@@ -130,21 +130,21 @@ std::vector<uint8_t> to_bytevc(IBuffer buffer) {
 std::vector<uint8_t> parseManufacturerData(BluetoothLEAdvertisement advertisement)  {
   if (advertisement.ManufacturerData().Size() == 0)
     return std::vector<uint8_t>();
-
   auto manufacturerData = advertisement.ManufacturerData().GetAt(0);
   // FIXME Compat with REG_DWORD_BIG_ENDIAN
-  uint8_t* prefix = uint16_t_union{ manufacturerData.CompanyId() }.bytes;
-  auto result = std::vector<uint8_t>{ prefix, prefix + sizeof(uint16_t_union) };
+  //uint8_t* prefix = uint16_t_union{ manufacturerData.CompanyId() }.bytes;
 
+  //auto result = std::vector<uint8_t>{ prefix, prefix + sizeof(uint16_t_union) };
   auto data = to_bytevc(manufacturerData.Data());
-  result.insert(result.end(), data.begin(), data.end());
-  return result;
+
+  //result.insert(result.end(), data.begin(), data.end());
+  return data;
 }
 
 void FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     BluetoothLEAdvertisementWatcher sender,
     BluetoothLEAdvertisementReceivedEventArgs args) {
-  //OutputDebugString((L"Received " + winrt::to_hstring(args.BluetoothAddress()) + L"\n").c_str());
+ // OutputDebugString((L"Received " + winrt::to_hstring (args.Advertisement()) + L"\n").c_str());
   auto manufacturer_data = parseManufacturerData(args.Advertisement());
   if (scan_result_sink_) {
     auto bluetoothAddress = args.BluetoothAddress();
@@ -164,6 +164,7 @@ void FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
       {"address", std::to_string(bluetoothAddress)},
       {"manufacturerSpecificData", manufacturer_data},
       {"rssi", args.RawSignalStrengthInDBm()},
+        {"manufacturerId", args.Advertisement().ManufacturerData().GetAt(0).CompanyId()},
       //{"serviceUuids", args.Advertisement().ServiceUuids()},
     });
   }
