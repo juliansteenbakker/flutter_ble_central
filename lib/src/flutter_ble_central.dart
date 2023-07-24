@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
 import 'package:flutter_ble_central/src/models/enums/central_state.dart';
@@ -26,6 +27,8 @@ class FlutterBleCentral {
 
   /// Singleton constructor
   FlutterBleCentral._internal();
+
+  static const tag = 'flutter_ble_central:';
 
   /// Method Channel used to communicate state with
   final MethodChannel _methodChannel =
@@ -63,17 +66,10 @@ class FlutterBleCentral {
           (scanSettings ?? ScanSettings()).toJson(),
         );
       } on PlatformException catch (e) {
+        debugPrint('$tag platform exception: $e');
         return BluetoothCentralState.turnedOff;
       }
-
       return BluetoothCentralState.ready;
-      //
-      // // return BluetoothCentralState.ready;
-      // if (response != null && response) {
-      //   return BluetoothCentralState.ready;
-      // } else {
-      //   return BluetoothCentralState.denied;
-      // }
     }
     final response = await _methodChannel.invokeMethod<int>(
       'start',
