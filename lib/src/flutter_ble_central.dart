@@ -57,10 +57,14 @@ class FlutterBleCentral {
     ScanSettings? scanSettings,
   }) async {
     if (Platform.isWindows) {
-      await _methodChannel.invokeMethod<bool>(
-        'start',
-        (scanSettings ?? ScanSettings()).toJson(),
-      );
+      try {
+        await _methodChannel.invokeMethod(
+          'start',
+          (scanSettings ?? ScanSettings()).toJson(),
+        );
+      } on PlatformException catch (e) {
+        return BluetoothCentralState.turnedOff;
+      }
 
       return BluetoothCentralState.ready;
       //

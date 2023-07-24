@@ -100,8 +100,15 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         //bluetoothLEWatcher.SignalStrengthFilter().OutOfRangeThresholdInDBm(-75);
         // bluetoothLEWatcher.SignalStrengthFilter().OutOfRangeTimeout(std::chrono::milliseconds{ 2000 });
         bluetoothLEWatcherReceivedToken = bluetoothLEWatcher.Received({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Received });
+        bluetoothLEWatcher.Stopped({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped });
       }
-      bluetoothLEWatcher.Start();
+      try {
+          bluetoothLEWatcher.Start();
+      } catch (...) {
+          result->Error("Failed to start scanning");
+          return;
+      }
+
       result->Success(nullptr);
     } else if (method_call.method_name().compare("stop") == 0) {
       if (bluetoothLEWatcher) {
@@ -139,6 +146,12 @@ std::vector<uint8_t> parseManufacturerData(BluetoothLEAdvertisement advertisemen
 
   //result.insert(result.end(), data.begin(), data.end());
   return data;
+}
+
+void FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped(
+    BluetoothLEAdvertisementWatcher sender,
+    BluetoothLEAdvertisementWatcherStoppedEventArgs args) {
+    // OutputDebugString((L"Received ".c_str());
 }
 
 void FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
