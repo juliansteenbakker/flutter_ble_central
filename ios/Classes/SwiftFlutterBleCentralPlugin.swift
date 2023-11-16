@@ -34,7 +34,7 @@ public class SwiftFlutterBleCentralPlugin: NSObject, FlutterPlugin {
           result(nil)
       case "hasPermission":
           result(flutterBleCentralManager.hasPermissions)
-      case "requestPermissions":
+      case "requestPermission":
           result(flutterBleCentralManager.hasPermissions)
       default:
           result(FlutterMethodNotImplemented)

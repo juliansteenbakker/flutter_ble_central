@@ -117,7 +117,7 @@ class FlutterBleCentral {
 
   Future<BluetoothCentralState> requestPermission() async {
     final response =
-        await _methodChannel.invokeMethod<int>('requestPermissions');
+        await _methodChannel.invokeMethod<int>('requestPermission');
     return response == null
         ? BluetoothCentralState.unknown
         : BluetoothCentralState.values[response];
