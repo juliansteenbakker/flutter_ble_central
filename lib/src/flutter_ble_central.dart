@@ -197,7 +197,7 @@ class FlutterBleCentral {
       if (manufacturerIdAndData.length >= 3) {
         manufacturerSpecificData = {
           "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
-              manufacturerIdAndData.skip(2).toList()
+              manufacturerIdAndData.skip(2).toList(),
         };
       }
 

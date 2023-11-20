@@ -169,7 +169,7 @@ class _MyAppState extends State<MyApp> {
                       break;
                   }
                 },
-              )
+              ),
           ],
         ),
         body: Column(

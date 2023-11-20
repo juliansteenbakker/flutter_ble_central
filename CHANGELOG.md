@@ -1,3 +1,6 @@
+## 0.0.7
+- [Android] Fixed requestPermission not working correctly.
+
 ## 0.0.6
 
 Fixed windows search state
