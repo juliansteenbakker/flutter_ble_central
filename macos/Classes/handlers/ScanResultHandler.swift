@@ -44,7 +44,9 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
         if let eventSink = self.eventSink {
             let localName = advertiseData[CBAdvertisementDataLocalNameKey] as? String
             let manufacturerData = advertiseData[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data();
-            let serviceData = advertiseData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
+            
+            // TODO: Not supported by flutter
+//            let serviceData = advertiseData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data];
             
             let txPowerLevel = advertiseData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber
             let isConnectable = advertiseData[CBAdvertisementDataIsConnectable] as? Bool
@@ -62,19 +64,43 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
                 CBUUID.uuidString
             })
             
-            let deviceDiscoveryMessage = [
-                "deviceName": localName,
+            var deviceDiscoveryMessage = [
                 "manufacturerSpecificData": manufacturerData,
 //                "serviceData": serviceData.map(),
-                "serviceUuids": serviceUUIDs,
-                "overflowServiceUUIDs": overflowServiceUUIDs,
 //                "txPower": Int32(txPowerLevel),
-                "connectable": isConnectable,
-                "serviceSolicitationUuids": solicitedServiceUUIDs,
                 "address": peripheral.identifier.uuidString,
                 "rssi": Int32(rssi)
 //                "connectable": connectable
             ] as [String : Any]
+            
+            if (localName != nil) {
+                deviceDiscoveryMessage["deviceName"] = localName
+            }
+            
+            if (serviceUUIDs != nil) {
+                deviceDiscoveryMessage["serviceUuids"] = serviceUUIDs
+            }
+            
+            if (overflowServiceUUIDs != nil) {
+                deviceDiscoveryMessage["overflowServiceUUIDs"] = overflowServiceUUIDs
+            }
+            
+            if (isConnectable != nil) {
+                deviceDiscoveryMessage["connectable"] = isConnectable
+            }
+            
+            if (solicitedServiceUUIDs != nil) {
+                deviceDiscoveryMessage["serviceSolicitationUuids"] = solicitedServiceUUIDs
+            }
+            
+//            if (serviceData != nil) {
+//                deviceDiscoveryMessage["serviceData"] = serviceData
+//            }
+            
+            if (txPowerLevel != nil) {
+                deviceDiscoveryMessage["txPower"] = txPowerLevel
+            }
+            
             
             eventSink(deviceDiscoveryMessage)
         }

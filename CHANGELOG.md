@@ -1,3 +1,6 @@
+## 0.0.8
+- [macOS] Fixed build errors.
+
 ## 0.0.7
 - [Android] Fixed requestPermission not working correctly.
 
