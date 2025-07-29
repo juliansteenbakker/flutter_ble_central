@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
@@ -29,13 +31,8 @@ class FlutterBleCentralManager(context: Context) {
   var pendingResultForActivityResult: MethodChannel.Result? = null
   var pendingResultForPermissionResult: MethodChannel.Result? = null
 
-  fun startScan(scanSettings: ScanSettings, result: MethodChannel.Result, scanCallback: ScanCallback) {
-    try {
-      mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback)
-      result.success(State.Ready.ordinal)
-    } catch (e: Exception) {
-      result.error("startScan", e.message, e)
-    }
+  fun startScan(scanSettings: ScanSettings, scanCallback: ScanCallback) {
+    mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback)
   }
 
   fun stopScan(scanCallback: ScanCallback) {

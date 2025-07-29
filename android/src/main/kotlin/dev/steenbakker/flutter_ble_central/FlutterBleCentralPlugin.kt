@@ -60,44 +60,115 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   override fun onMethodCall(call: MethodCall, result: Result) {
     if (flutterBleCentralManager == null || context == null) {
-      result.error("Not initialized", "FlutterBleCentral is not correctly initialized", null)
+      safeResult(result) {
+        result.error("Not initialized", "FlutterBleCentral is not correctly initialized", null)
+      }
+      return
     }
+
     if (call.method == "start") {
       startStopCall = call
       startStopResult = result
       val state = checkBluetoothState(result)
-      if (state != State.Ready) {
-        return
-      }
+      if (state != State.Ready) return
     }
 
     when (call.method) {
-      "start" -> startScan(call, result)
-      "stop" -> stopScan(result)
-      "isSupported" -> isSupported(result, context!!)
-      "enableBluetooth" -> enableBluetooth(call, result)
-      "requestPermission" -> Handler(Looper.getMainLooper()).post {
-        flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
+      "start" -> handleStart(call, result)
+      "stop" -> handleStop(result)
+      "isSupported" -> handleIsSupported(result)
+      "enableBluetooth" -> handleEnableBluetooth(call, result)
+      "requestPermission" -> handleRequestPermission(result)
+      "hasPermission" -> handleHasPermission(result)
+      "openAppSettings" -> handleOpenAppSettings(result)
+      "openBluetoothSettings" -> handleOpenBluetoothSettings(result)
+      else -> handleNotImplemented(result)
+    }
+  }
+
+  private fun handleStart(call: MethodCall, result: Result) {
+    startScan(call, result)
+  }
+
+  private fun handleStop(result: Result) {
+    if (scanCallback != null) {
+      flutterBleCentralManager?.stopScan(scanCallback!!)
+      scanCallback?.scanResultHandler?.stop = true
+    }
+    safeResult(result) {
+      result.success(State.Ready.ordinal)
+    }
+  }
+
+  private fun handleIsSupported(result: Result) {
+    val isSupported = context?.packageManager?.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
+    safeResult(result) {
+      result.success(isSupported)
+    }
+  }
+
+  private fun handleEnableBluetooth(call: MethodCall, result: Result) {
+    if (activityBinding != null) {
+      val isEnabled = flutterBleCentralManager!!
+        .checkAndEnableBluetooth(call.arguments as Boolean, result, activityBinding!!)
+      safeResult(result) {
+        result.success(isEnabled)
       }
-//      "isScanning" -> Handler(Looper.getMainLooper()).post {
-//        result.success(flutterBleCentralManager!!.mBluetoothLeScanner?.)
-//      }
-      "hasPermission" -> Handler(Looper.getMainLooper()).post {
-        result.success(flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, null).ordinal)
-      }
-      "openAppSettings" -> Handler(Looper.getMainLooper()).post {
-        activityBinding!!.activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context!!.packageName, null)))
-        result.success(null)
-      }
-      "openBluetoothSettings" -> Handler(Looper.getMainLooper()).post {
-        activityBinding!!.activity.startActivity( Intent(Settings.ACTION_BLUETOOTH_SETTINGS), null)
-        result.success(null)
-      }
-      else -> Handler(Looper.getMainLooper()).post {
-        result.notImplemented()
+    } else {
+      safeResult(result) {
+        result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
       }
     }
   }
+
+  private fun handleRequestPermission(result: Result) {
+    flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
+    // result handling is done internally
+  }
+
+  private fun handleHasPermission(result: Result) {
+    val permission = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, null).ordinal
+    safeResult(result) {
+      result.success(permission)
+    }
+  }
+
+  private fun handleOpenAppSettings(result: Result) {
+    activityBinding!!.activity.startActivity(
+      Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context!!.packageName, null)
+      )
+    )
+    safeResult(result) {
+      result.success(null)
+    }
+  }
+
+  private fun handleOpenBluetoothSettings(result: Result) {
+    activityBinding!!.activity.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS), null)
+    safeResult(result) {
+      result.success(null)
+    }
+  }
+
+  private fun handleNotImplemented(result: Result) {
+    safeResult(result) {
+      result.notImplemented()
+    }
+  }
+
+
+  private fun safeResult(result: Result, block: () -> Unit) {
+    Handler(Looper.getMainLooper()).post {
+      try {
+        block()
+      } catch (e: Exception) {
+        result.error("UNEXPECTED_ERROR", e.message, null)
+      }
+    }
+  }
+
 
   private fun startScan(call: MethodCall, result: Result) {
     if (call.arguments !is Map<*, *>) {
@@ -122,14 +193,28 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     (arguments["scanMode"] as Int?)?.let { scanSettings.setScanMode((arguments["scanMode"] as Int)) }
 
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
-    flutterBleCentralManager?.startScan(scanSettings.build(), result, scanCallback!!)
+
+    try {
+      flutterBleCentralManager?.startScan(scanSettings.build(), scanCallback!!)
+      safeResult(result) {
+        result.success(State.Ready.ordinal)
+      }
+    } catch (e: Exception) {
+      safeResult(result) {
+        result.error("startScan", e.message, null)
+      }
+    }
+
   }
 
   private fun stopScan(result: Result) {
     if (scanCallback != null) {
       flutterBleCentralManager?.stopScan(scanCallback!!)
     }
-    result.success(State.Ready.ordinal)
+    Handler(Looper.getMainLooper()).post {
+      scanCallback?.scanResultHandler?.stop = true;
+      result.success(State.Ready.ordinal)
+    }
   }
 
   private fun isSupported(result: Result, context: Context) {
@@ -141,12 +226,18 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   }
 
   private fun checkBluetoothState(result: Result): State {
+
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
       result.success(State.Unsupported.ordinal)
       startStopCall = null
       startStopResult = null
       return State.Unsupported
     } else {
+      if (activityBinding == null) {
+        result.error("No activity", "Activity is not attached", null)
+        return State.Denied
+      }
+
       // Can't check whether ble is turned off or not supported, see https://stackoverflow.com/questions/32092902/why-ismultipleadvertisementsupported-returns-false-when-getbluetoothleadverti
       // !bluetoothAdapter.isMultipleAdvertisementSupported
       flutterBleCentralManager!!.mBluetoothLeScanner = flutterBleCentralManager!!.mBluetoothManager!!.adapter.bluetoothLeScanner
