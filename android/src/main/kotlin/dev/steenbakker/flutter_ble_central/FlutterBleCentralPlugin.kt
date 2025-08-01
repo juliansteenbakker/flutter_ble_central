@@ -93,7 +93,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   private fun handleStop(result: Result) {
     if (scanCallback != null) {
       flutterBleCentralManager?.stopScan(scanCallback!!)
-      scanCallback?.scanResultHandler?.stop = true
     }
     safeResult(result) {
       result.success(State.Ready.ordinal)
