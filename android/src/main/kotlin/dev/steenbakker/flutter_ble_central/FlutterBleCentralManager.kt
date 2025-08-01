@@ -30,6 +30,8 @@ class FlutterBleCentralManager(context: Context) {
 
   var pendingResultForActivityResult: MethodChannel.Result? = null
   var pendingResultForPermissionResult: MethodChannel.Result? = null
+  var permissionResultCallback: ((Boolean) -> Unit)? = null
+
 
   fun startScan(scanSettings: ScanSettings, scanCallback: ScanCallback) {
     mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback)
@@ -70,10 +72,22 @@ class FlutterBleCentralManager(context: Context) {
             == PackageManager.PERMISSION_GRANTED)
   }
 
+
+  fun enableBluetoothProcedure(activity: Activity) {
+    if (isBluetoothEnabled()) return
+
+    var permissions = getMissingPermissions(activity)
+
+    if (!permissions.isEmpty()) {
+      requestPermission(permissions)
+      return;
+    }
+  }
+
   /**
-   * Enables bluetooth with a dialog or without.
+   * Enables bluetooth with a dialog or without, and by checking permissions first.
    */
-  fun checkAndEnableBluetooth(shouldAsk: Boolean, result: MethodChannel.Result, activityBinding: ActivityPluginBinding): Boolean {
+  fun checkAndEnableBluetooth(shouldAsk: Boolean): Boolean {
     return if (mBluetoothManager!!.adapter.isEnabled) {
       true
     } else {
@@ -84,76 +98,21 @@ class FlutterBleCentralManager(context: Context) {
     }
   }
 
-  fun requestPermission(activity: Activity, result: MethodChannel.Result?): State {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      if (!hasBluetoothScanPermission(activity) || !hasBluetoothConnectPermission(activity)) {
-        if (result != null) {
-          pendingResultForPermissionResult = result
-          ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(
-              Manifest.permission.BLUETOOTH_CONNECT,
-              Manifest.permission.BLUETOOTH_SCAN
-            ),
-            REQUEST_PERMISSION_BT
-          )
-        }
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_SCAN) ||
-          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_CONNECT)) {
-          Log.w("TEST", "Denied!")
-          return State.Denied
-        }
-        Log.w("TEST", "Permanently denied!")
-        return State.PermanentlyDenied
-      } else {
-        Log.w("TEST", "We have all permissions!")
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      if (!hasLocationCoarsePermission(activity) || !hasLocationFinePermission(activity)) {
-        if (result != null) {
-          pendingResultForPermissionResult = result
-          ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(
-              Manifest.permission.ACCESS_FINE_LOCATION,
-              Manifest.permission.ACCESS_COARSE_LOCATION
-            ),
-            REQUEST_PERMISSION_BT
-          )
-        }
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) ||
-          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-          return State.Denied
-        }
-        return State.PermanentlyDenied
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      if (!hasLocationCoarsePermission(activity)) {
-        if (result != null) {
-          pendingResultForPermissionResult = result
-          ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
-            REQUEST_PERMISSION_BT
-          )
-        }
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-          return State.Denied
-        }
-        return State.PermanentlyDenied
-      }
-    }
-    return State.Granted
+  fun isBluetoothEnabled(): Boolean {
+    return mBluetoothManager!!.adapter.isEnabled;
   }
 
-  fun enableBluetooth(ask: Boolean, result: MethodChannel.Result?, activityBinding: ActivityPluginBinding, askForPermission: Boolean) {
-    if (ask && pendingResultForActivityResult == null) {
-      if (askForPermission) {
-        pendingResultForPermissionResult = result
-      } else {
-        pendingResultForActivityResult = result
-      }
+  fun askAndEnableBluetooth(activityBinding: ActivityPluginBinding) {
+    ActivityCompat.startActivityForResult(
+      activityBinding.activity,
+      Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+      REQUEST_ENABLE_BT,
+      null
+    )
+  }
 
+  fun enableBluetooth(ask: Boolean, activityBinding: ActivityPluginBinding) {
+    if (ask && pendingResultForActivityResult == null) {
       ActivityCompat.startActivityForResult(
         activityBinding.activity,
         Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
@@ -164,5 +123,103 @@ class FlutterBleCentralManager(context: Context) {
       @Suppress("DEPRECATION")
       mBluetoothManager!!.adapter.enable()
     }
+  }
+
+  fun getMissingPermissions(activity: Activity): List<String> {
+    val missingPermissions = mutableListOf<String>()
+
+    when {
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        if (!hasBluetoothScanPermission(activity)) {
+          missingPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        if (!hasBluetoothConnectPermission(activity)) {
+          missingPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+      }
+
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> {
+        if (!hasLocationFinePermission(activity)) {
+          missingPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (!hasLocationCoarsePermission(activity)) {
+          missingPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+      }
+
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+        if (!hasLocationCoarsePermission(activity)) {
+          missingPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+      }
+    }
+
+    return missingPermissions
+  }
+
+
+  fun requestPermission(
+    activity: Activity,
+    permissions: List<String>
+  ) {
+    // Request permissions asynchronously
+    ActivityCompat.requestPermissions(
+      activity,
+      permissions.toTypedArray(),
+      REQUEST_PERMISSION_BT
+    )
+  }
+
+
+  fun requestPermission(activity: Activity, onPermissionReceived: (Boolean) -> Unit): State {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      if (!hasBluetoothScanPermission(activity) || !hasBluetoothConnectPermission(activity)) {
+        permissionResultCallback = onPermissionReceived
+        ActivityCompat.requestPermissions(
+          activity,
+          arrayOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_SCAN
+          ),
+          REQUEST_PERMISSION_BT
+        )
+        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_SCAN) ||
+          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_CONNECT)) {
+          return State.Denied
+        }
+        return State.PermanentlyDenied
+      }
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      if (!hasLocationCoarsePermission(activity) || !hasLocationFinePermission(activity)) {
+          permissionResultCallback = onPermissionReceived
+          ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(
+              Manifest.permission.ACCESS_FINE_LOCATION,
+              Manifest.permission.ACCESS_COARSE_LOCATION
+            ),
+            REQUEST_PERMISSION_BT
+          )
+        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) ||
+          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
+          return State.Denied
+        }
+        return State.PermanentlyDenied
+      }
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      if (!hasLocationCoarsePermission(activity)) {
+          permissionResultCallback = onPermissionReceived
+          ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
+            REQUEST_PERMISSION_BT
+          )
+        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
+          return State.Denied
+        }
+        return State.PermanentlyDenied
+      }
+    }
+    return State.Granted
   }
 }

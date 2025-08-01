@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.REQUEST_PERMISSION_BT
 import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
 import dev.steenbakker.flutter_ble_central.handlers.StateChangedHandler
@@ -28,7 +29,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
 
 /** FlutterBleCentralPlugin */
-class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener {
+class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, PluginRegistry.RequestPermissionsResultListener, PluginRegistry.ActivityResultListener {
 
   private lateinit var methodChannel : MethodChannel
   private lateinit var stateChangedHandler: StateChangedHandler
@@ -109,8 +110,7 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   private fun handleEnableBluetooth(call: MethodCall, result: Result) {
     if (activityBinding != null) {
-      val isEnabled = flutterBleCentralManager!!
-        .checkAndEnableBluetooth(call.arguments as Boolean, result, activityBinding!!)
+      val isEnabled = flutterBleCentralManager!!.checkAndEnableBluetooth(call.arguments as Boolean, (result) ->, activityBinding!!)
       safeResult(result) {
         result.success(isEnabled)
       }
@@ -207,24 +207,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   }
 
-  private fun stopScan(result: Result) {
-    if (scanCallback != null) {
-      flutterBleCentralManager?.stopScan(scanCallback!!)
-    }
-    Handler(Looper.getMainLooper()).post {
-      scanCallback?.scanResultHandler?.stop = true;
-      result.success(State.Ready.ordinal)
-    }
-  }
-
-  private fun isSupported(result: Result, context: Context) {
-    val isSupported = context.packageManager?.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
-
-    Handler(Looper.getMainLooper()).post {
-      result.success(isSupported)
-    }
-  }
-
   private fun checkBluetoothState(result: Result): State {
 
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
@@ -250,15 +232,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
         }
       }
       return hasPermissions
-    }
-  }
-
-  private fun enableBluetooth(call: MethodCall, result: Result) {
-    if (activityBinding != null) {
-      val isEnabled = flutterBleCentralManager!!.checkAndEnableBluetooth(call.arguments as Boolean, result, activityBinding!!)
-      result.success(isEnabled)
-    } else {
-      result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
     }
   }
 
@@ -308,31 +281,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     binding.addRequestPermissionsResultListener(this)
-    binding.addActivityResultListener { requestCode, resultCode, _ ->
-      when (requestCode) {
-        FlutterBleCentralManager.REQUEST_ENABLE_BT -> {
-          if (flutterBleCentralManager?.pendingResultForActivityResult != null) {
-            startStopCall = null
-            flutterBleCentralManager!!.pendingResultForActivityResult!!.success(resultCode == Activity.RESULT_OK)
-          } else if (flutterBleCentralManager?.pendingResultForPermissionResult != null) {
-           if (resultCode == Activity.RESULT_OK) {
-             if (startStopCall != null) {
-               onMethodCall(startStopCall!!, flutterBleCentralManager!!.pendingResultForPermissionResult!!)
-               startStopCall = null
-               flutterBleCentralManager?.pendingResultForPermissionResult = null
-             }
-           } else {
-             flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.TurnedOff.ordinal)
-           }
-          }
-          flutterBleCentralManager?.pendingResultForActivityResult = null
-          return@addActivityResultListener true
-        }
-        else -> return@addActivityResultListener false
-      }
-    }
+    binding.addActivityResultListener(this)
     activityBinding = binding
   }
+
 
   override fun onDetachedFromActivityForConfigChanges() {
     onDetachedFromActivity()
@@ -344,5 +296,30 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   override fun onDetachedFromActivity() {
     activityBinding = null
+  }
+
+  override fun onActivityResult(
+    requestCode: Int,
+    resultCode: Int,
+    data: Intent?
+  ): Boolean {
+    if (requestCode != REQUEST_PERMISSION_BT) return false
+
+    val deniedPermissions = permissions
+      .zip(grantResults.toTypedArray())
+      .filter { it.second != PackageManager.PERMISSION_GRANTED }
+
+    val resultState = when {
+      deniedPermissions.isEmpty() -> State.Granted
+      deniedPermissions.any { permission ->
+        ActivityCompat.shouldShowRequestPermissionRationale(activity, permission.first)
+      } -> State.Denied
+
+      else -> State.PermanentlyDenied
+    }
+
+    flutterBleCentralManager?.pendingResultForPermissionResult?.success(resultState.ordinal)
+    flutterBleCentralManager?.pendingResultForPermissionResult = null
+    return true
   }
 }
