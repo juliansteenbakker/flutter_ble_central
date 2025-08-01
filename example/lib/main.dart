@@ -79,6 +79,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      showPerformanceOverlay: true,
       scaffoldMessengerKey: _messangerKey,
       home: Scaffold(
         appBar: AppBar(
@@ -208,6 +209,7 @@ class _MyAppState extends State<MyApp> {
               child: const Text('App settings'),
             ),
             Text('Packets found: $packetsFound, in queue $queue'),
+            CircularProgressIndicator(),
             ListView.separated(
               shrinkWrap: true,
               padding: const EdgeInsets.all(8),
