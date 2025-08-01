@@ -51,4 +51,37 @@ class ScanResult {
       _$ScanResultFromJson(json);
 
   Map<String, dynamic> toJson() => _$ScanResultToJson(this);
+
+  factory ScanResult.fromPlatform(Map<Object?, Object?> raw) {
+    final map = deepCastMap(raw);
+    return ScanResult.fromJson(map);
+  }
+
+  static Map<String, dynamic> deepCastMap(Map<Object?, Object?> raw) {
+    return raw.map((key, value) {
+      final String castKey = key.toString();
+
+      if (value is Map<Object?, Object?>) {
+        return MapEntry(castKey, deepCastMap(value));
+      }
+
+      if (value is Map) {
+        // fallback for mixed key types
+        return MapEntry(castKey, deepCastMap(Map<Object?, Object?>.from(value)));
+      }
+
+      if (value is List) {
+        return MapEntry(castKey, value.map((e) {
+          if (e is Map) {
+            return deepCastMap(Map<Object?, Object?>.from(e));
+          }
+          return e;
+        }).toList());
+      }
+
+      return MapEntry(castKey, value);
+    });
+  }
+
+
 }
