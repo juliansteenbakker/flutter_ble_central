@@ -12,7 +12,6 @@ class ScanResultCallback(
 
     override fun onScanResult(callbackType: Int, result: ScanResult) {
         super.onScanResult(callbackType, result)
-//        scanResultHandler.ii++
         scanResultHandler.publish(result)
     }
 
@@ -24,7 +23,6 @@ class ScanResultCallback(
     override fun onBatchScanResults(results: List<ScanResult>) {
         super.onBatchScanResults(results)
         results.forEach {
-//            scanResultHandler.ii++
             scanResultHandler.publish(it)
         }
     }

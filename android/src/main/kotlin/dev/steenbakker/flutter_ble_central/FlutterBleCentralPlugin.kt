@@ -157,7 +157,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     }
   }
 
-
   private fun safeResult(result: Result, block: () -> Unit) {
     Handler(Looper.getMainLooper()).post {
       try {
@@ -167,7 +166,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       }
     }
   }
-
 
   private fun startScan(call: MethodCall, result: Result) {
     if (call.arguments !is Map<*, *>) {
@@ -206,24 +204,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   }
 
-  private fun stopScan(result: Result) {
-    if (scanCallback != null) {
-      flutterBleCentralManager?.stopScan(scanCallback!!)
-    }
-    Handler(Looper.getMainLooper()).post {
-      scanCallback?.scanResultHandler?.stop = true;
-      result.success(State.Ready.ordinal)
-    }
-  }
-
-  private fun isSupported(result: Result, context: Context) {
-    val isSupported = context.packageManager?.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
-
-    Handler(Looper.getMainLooper()).post {
-      result.success(isSupported)
-    }
-  }
-
   private fun checkBluetoothState(result: Result): State {
 
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
@@ -249,15 +229,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
         }
       }
       return hasPermissions
-    }
-  }
-
-  private fun enableBluetooth(call: MethodCall, result: Result) {
-    if (activityBinding != null) {
-      val isEnabled = flutterBleCentralManager!!.checkAndEnableBluetooth(call.arguments as Boolean, result, activityBinding!!)
-      result.success(isEnabled)
-    } else {
-      result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
     }
   }
 

@@ -9,7 +9,13 @@ import androidx.core.util.isNotEmpty
 import androidx.core.util.size
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.iterator
@@ -40,12 +46,27 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     }
 
     fun publish(scanResult: ScanResult) {
-        val mapped = scanResultToMap(scanResult)
+        val startTime = System.currentTimeMillis()
+        val mapped = scanResultToMapLight(scanResult)
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(mapped)
+            val duration = System.currentTimeMillis() - startTime
+            PublishTimingStats.logTime(duration)
         }
     }
 
+    object PublishTimingStats {
+        val totalTime = AtomicLong(0)
+        val callCount = AtomicInteger(0)
+
+        fun logTime(durationMs: Long) {
+            totalTime.addAndGet(durationMs)
+            val count = callCount.incrementAndGet()
+            val average = totalTime.get() / count
+//            Log.d("PublishTiming", "This call: $durationMs ms, Average: $average ms over $count calls")
+        }
+    }
+//
 //    private fun scanResultToMap(id: Int): Map<String, Any?> {
 //        val dummyDevice = mapOf(
 //            "address" to "00:11:22:33:44:${id % 100}",
@@ -150,6 +171,36 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
             "rssi" to scanResult.rssi,
             "timestampNanos" to scanResult.timestampNanos,
             "connectable" to isConnectable
+        )
+    }
+
+    private fun scanResultToMapLight(scanResult: ScanResult): Map<String, Any?> {
+        val device = scanResult.device
+        val scanRecord = scanResult.scanRecord
+
+        val deviceMap = mapOf(
+            "address" to device.address,
+        )
+
+        val scanRecordMap = mutableMapOf<String, Any?>().apply {
+
+            scanRecord?.manufacturerSpecificData?.takeIf { it.isNotEmpty() }?.let { data ->
+                val manufacturerMap = mutableMapOf<String, ByteArray>()
+                for (i in 0 until data.size) {
+                    manufacturerMap[data.keyAt(i).toString()] = data.valueAt(i)
+                }
+                this["manufacturerSpecificData"] = manufacturerMap
+            }
+
+            scanRecord?.serviceUuids?.takeIf { it.isNotEmpty() }?.let { uuids ->
+                this["serviceUuids"] = uuids.map { it.toString() }
+            }
+
+        }
+
+        return mapOf(
+            "device" to deviceMap,
+            "scanRecord" to scanRecordMap,
         )
     }
 }
