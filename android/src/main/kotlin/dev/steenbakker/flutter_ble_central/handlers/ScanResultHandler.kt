@@ -25,6 +25,7 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
 
     private var eventSink: EventChannel.EventSink? = null
     private var isRunning = false
+    private var useLightweightScanResult = false
 
     private val eventChannel = EventChannel(
         flutterPluginBinding.binaryMessenger,
@@ -35,9 +36,12 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         eventChannel.setStreamHandler(this)
     }
 
+    fun setUseLightweightScanResult(useLightweight: Boolean) {
+        useLightweightScanResult = useLightweight
+    }
+
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         this.eventSink = events
-//        startDummyEmitter()
     }
 
     override fun onCancel(arguments: Any?) {
@@ -47,7 +51,11 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
 
     fun publish(scanResult: ScanResult) {
         val startTime = System.currentTimeMillis()
-        val mapped = scanResultToMapLight(scanResult)
+        val mapped = if (useLightweightScanResult) {
+            scanResultToMapLight(scanResult)
+        } else {
+            scanResultToMap(scanResult)
+        }
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(mapped)
             val duration = System.currentTimeMillis() - startTime
@@ -63,63 +71,9 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
             totalTime.addAndGet(durationMs)
             val count = callCount.incrementAndGet()
             val average = totalTime.get() / count
-//            Log.d("PublishTiming", "This call: $durationMs ms, Average: $average ms over $count calls")
+            Log.d("PublishTiming", "This call: $durationMs ms, Average: $average ms over $count calls")
         }
     }
-//
-//    private fun scanResultToMap(id: Int): Map<String, Any?> {
-//        val dummyDevice = mapOf(
-//            "address" to "00:11:22:33:44:${id % 100}",
-//            "bondState" to 12,
-//            "name" to "DummyDevice$id",
-//            "type" to 3,
-//        )
-//
-//        val dummyScanRecord = mapOf(
-//            "advertiseFlags" to 2,
-//            "bytes" to ByteArray(10) { it.toByte() },
-//            "deviceName" to "DummyDevice$id",
-//            "txPowerLevel" to -59,
-//            "manufacturerSpecificData" to mapOf("1234" to ByteArray(3) { (it + id).toByte() }),
-//            "serviceUuids" to listOf(UUID.randomUUID().toString()),
-//            "serviceData" to mapOf(UUID.randomUUID().toString() to ByteArray(5) { it.toByte() })
-//        )
-//
-//        return mapOf(
-//            "device" to dummyDevice,
-//            "scanRecord" to dummyScanRecord,
-//            "rssi" to (-60..-30).random(),
-//            "timestampNanos" to System.nanoTime(),
-//            "connectable" to true
-//        )
-//    }
-//
-//    private fun startDummyEmitter() {
-//        isRunning = true
-//        thread {
-//            val handler = Handler(Looper.getMainLooper())
-//            var counter = 0
-//            var totalPackets = 0
-//
-//            while (isRunning) {
-//                val batchSize = 5000
-//                val packets = List(batchSize) { scanResultToMap(counter + it) }
-//
-//                    packets.forEach { packet ->
-//                        handler.post {
-//                        eventSink?.success(packet)
-//                    }
-//                }
-//
-//                counter += batchSize
-//                totalPackets += batchSize
-//
-//                Log.i("ScanResultEmitter", "Sent $batchSize packets this second, total: $totalPackets")
-//
-//                Thread.sleep(1000)
-//            }
-//        }
-//    }
 
     private fun scanResultToMap(scanResult: ScanResult): Map<String, Any?> {
         val device = scanResult.device

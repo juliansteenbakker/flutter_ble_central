@@ -10,19 +10,20 @@ ScanResult _$ScanResultFromJson(Map<String, dynamic> json) => ScanResult(
       device: json['device'] == null
           ? null
           : BluetoothDevice.fromJson(json['device'] as Map<String, dynamic>),
-      eventType: json['eventType'] as int?,
-      primaryPhy: json['primaryPhy'] as int?,
-      secondaryPhy: json['secondaryPhy'] as int?,
-      advertisingSid: json['advertisingSid'] as int?,
-      txPower: json['txPower'] as int?,
-      rssi: json['rssi'] as int?,
-      periodicAdvertisingInterval: json['periodicAdvertisingInterval'] as int?,
+      eventType: (json['eventType'] as num?)?.toInt(),
+      primaryPhy: (json['primaryPhy'] as num?)?.toInt(),
+      secondaryPhy: (json['secondaryPhy'] as num?)?.toInt(),
+      advertisingSid: (json['advertisingSid'] as num?)?.toInt(),
+      txPower: (json['txPower'] as num?)?.toInt(),
+      rssi: (json['rssi'] as num?)?.toInt(),
+      periodicAdvertisingInterval:
+          (json['periodicAdvertisingInterval'] as num?)?.toInt(),
       scanRecord: json['scanRecord'] == null
           ? null
           : ScanRecord.fromJson(json['scanRecord'] as Map<String, dynamic>),
-      timestampNanos: json['timestampNanos'] as int?,
+      timestampNanos: (json['timestampNanos'] as num?)?.toInt(),
       connectable: json['connectable'] as bool?,
-      queue: json['queue'] as int?,
+      queue: (json['queue'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$ScanResultToJson(ScanResult instance) =>

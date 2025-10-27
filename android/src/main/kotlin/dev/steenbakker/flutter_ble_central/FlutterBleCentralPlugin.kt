@@ -189,6 +189,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     (arguments["reportDelay"] as Int?)?.let { scanSettings.setReportDelay((arguments["reportDelay"] as Int).toLong()) }
     (arguments["scanMode"] as Int?)?.let { scanSettings.setScanMode((arguments["scanMode"] as Int)) }
 
+    // Set lightweight scan result mode if specified
+    val useLightweightScanResult = (arguments["useLightweightScanResult"] as Boolean?) ?: false
+    scanResultHandler.setUseLightweightScanResult(useLightweightScanResult)
+
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
 
     try {
@@ -205,7 +209,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   }
 
   private fun checkBluetoothState(result: Result): State {
-
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
       result.success(State.Unsupported.ordinal)
       startStopCall = null

@@ -9,9 +9,9 @@ part of 'bluetooth_device.dart';
 BluetoothDevice _$BluetoothDeviceFromJson(Map<String, dynamic> json) =>
     BluetoothDevice(
       address: json['address'] as String,
-      bondState: json['bondState'] as int?,
+      bondState: (json['bondState'] as num?)?.toInt(),
       name: json['name'] as String?,
-      type: json['type'] as int?,
+      type: (json['type'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$BluetoothDeviceToJson(BluetoothDevice instance) =>

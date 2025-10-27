@@ -7,7 +7,7 @@ part of 'scan_record.dart';
 // **************************************************************************
 
 ScanRecord _$ScanRecordFromJson(Map<String, dynamic> json) => ScanRecord(
-      advertiseFlags: json['advertiseFlags'] as int?,
+      advertiseFlags: (json['advertiseFlags'] as num?)?.toInt(),
       advertisingDataMap: const Uint8ListMapIntConverter()
           .fromJson(json['advertisingDataMap'] as Map<String, dynamic>?),
       bytes: const Uint8ListConverter().fromJson(json['bytes'] as List?),
@@ -23,7 +23,7 @@ ScanRecord _$ScanRecordFromJson(Map<String, dynamic> json) => ScanRecord(
       serviceUuids: (json['serviceUuids'] as List<dynamic>?)
           ?.map((e) => e as String?)
           .toList(),
-      txPowerLevel: json['txPowerLevel'] as int?,
+      txPowerLevel: (json['txPowerLevel'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$ScanRecordToJson(ScanRecord instance) =>

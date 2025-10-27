@@ -85,11 +85,6 @@ class FlutterBleCentral {
     if (Platform.isWindows) {
       await _methodChannel.invokeMethod<bool>('stop');
       return BluetoothCentralState.ready;
-      // if (response != null && response) {
-      //   return BluetoothCentralState.ready;
-      // } else {
-      //   return BluetoothCentralState.denied;
-      // }
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null
