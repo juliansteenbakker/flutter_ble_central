@@ -5,7 +5,6 @@
  */
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -85,11 +84,6 @@ class FlutterBleCentral {
     if (Platform.isWindows) {
       await _methodChannel.invokeMethod<bool>('stop');
       return BluetoothCentralState.ready;
-      // if (response != null && response) {
-      //   return BluetoothCentralState.ready;
-      // } else {
-      //   return BluetoothCentralState.denied;
-      // }
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null
@@ -177,46 +171,44 @@ class FlutterBleCentral {
   /// Parses the received data.
   void handleData(dynamic data, EventSink sink) {
     ScanResult? result;
+
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
-      data as Map<dynamic, dynamic>;
+      final raw = Map<String, dynamic>.from(data as Map);
 
       Uint8List manufacturerIdAndData =
-          data["manufacturerSpecificData"] as Uint8List;
+          raw["manufacturerSpecificData"] as Uint8List;
 
       if (Platform.isWindows) {
-        final int manufacturerId = data["manufacturerId"] as int;
+        final int manufacturerId = raw["manufacturerId"] as int;
         final b = BytesBuilder();
         final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
         b.add(l1);
         b.add(manufacturerIdAndData);
         manufacturerIdAndData = b.toBytes();
       }
-      Map<String, dynamic> manufacturerSpecificData = {};
 
-      // Check that both manufacturerID AND data is present
+      Map<String, dynamic> manufacturerSpecificData = {};
       if (manufacturerIdAndData.length >= 3) {
         manufacturerSpecificData = {
           "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
-              manufacturerIdAndData.skip(2).toList(),
+              manufacturerIdAndData.sublist(2),
         };
       }
 
-      final Map<String, dynamic> scanRecord = {
-        'deviceName': data['deviceName'],
+      raw['scanRecord'] = {
+        'deviceName': raw['deviceName'],
         'manufacturerSpecificData': manufacturerSpecificData,
-        'serviceData': data['serviceData'],
-        'serviceUuids': data['serviceUuids'],
+        'serviceData': raw['serviceData'],
+        'serviceUuids': raw['serviceUuids'],
       };
 
-      data['scanRecord'] = scanRecord;
-      data['device'] = {'address': data['address']};
+      raw['device'] = {'address': raw['address']};
 
-      result = ScanResult.fromJson(Map<String, dynamic>.from(data));
+      result = ScanResult.fromJson(raw);
     } else {
-      result = ScanResult.fromJson(
-        jsonDecode(data as String) as Map<String, dynamic>,
-      );
+      result = ScanResult.fromPlatform(data as Map<Object?, Object?>);
     }
+
     sink.add(result);
   }
 }

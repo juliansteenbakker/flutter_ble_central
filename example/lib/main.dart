@@ -24,6 +24,8 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         debugPrint('Packets found: $packetsFound, in queue $queue');
@@ -31,7 +33,7 @@ class _MyAppState extends State<MyApp> {
     });
 
     FlutterBleCentral().onScanError?.listen((event) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text(
             'Error: ${AndroidError.values[event]}, code: $event',
@@ -79,6 +81,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      showPerformanceOverlay: true,
       scaffoldMessengerKey: _messangerKey,
       home: Scaffold(
         appBar: AppBar(
@@ -208,6 +211,7 @@ class _MyAppState extends State<MyApp> {
               child: const Text('App settings'),
             ),
             Text('Packets found: $packetsFound, in queue $queue'),
+            const CircularProgressIndicator(),
             ListView.separated(
               shrinkWrap: true,
               padding: const EdgeInsets.all(8),
