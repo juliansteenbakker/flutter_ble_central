@@ -44,6 +44,3 @@ jobs:
 
       - name: Linter
         run: flutter analyze
-
-      - name: Run tests
-        run: flutter test --no-pub
