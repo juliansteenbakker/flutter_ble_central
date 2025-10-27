@@ -8,7 +8,7 @@ void main() {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -23,9 +23,6 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
     Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         debugPrint('Packets found: $packetsFound, in queue $queue');
@@ -33,7 +30,7 @@ class _MyAppState extends State<MyApp> {
     });
 
     FlutterBleCentral().onScanError?.listen((event) {
-      scaffoldMessenger.showSnackBar(
+      _messengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(
             'Error: ${AndroidError.values[event]}, code: $event',
@@ -48,11 +45,11 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  Future<void> _requestPermissions() async {
-    final hasPermission = await FlutterBleCentral().hasPermission();
+  Future<void> _requestPermissions([BluetoothCentralState? state]) async {
+    final hasPermission = state ?? await FlutterBleCentral().hasPermission();
     switch (hasPermission) {
       case BluetoothCentralState.denied:
-        _messangerKey.currentState?.showSnackBar(
+        _messengerKey.currentState?.showSnackBar(
           const SnackBar(
             backgroundColor: Colors.red,
             content: Text(
@@ -61,10 +58,11 @@ class _MyAppState extends State<MyApp> {
           ),
         );
 
-        await _requestPermissions();
-        break;
+        final result = await FlutterBleCentral().requestPermission();
+        _requestPermissions(result);
+        return;
       default:
-        _messangerKey.currentState?.showSnackBar(
+        _messengerKey.currentState?.showSnackBar(
           SnackBar(
             backgroundColor: Colors.green,
             content: Text(
@@ -72,17 +70,16 @@ class _MyAppState extends State<MyApp> {
             ),
           ),
         );
-        break;
     }
   }
 
-  final _messangerKey = GlobalKey<ScaffoldMessengerState>();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       showPerformanceOverlay: true,
-      scaffoldMessengerKey: _messangerKey,
+      scaffoldMessengerKey: _messengerKey,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Flutter BLE Central example'),
@@ -109,7 +106,7 @@ class _MyAppState extends State<MyApp> {
               IconButton(
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () async {
-                  final messenger = _messangerKey.currentState!;
+                  final messenger = _messengerKey.currentState!;
                   final state = await FlutterBleCentral().start();
                   switch (state) {
                     case BluetoothCentralState.ready:
@@ -118,7 +115,6 @@ class _MyAppState extends State<MyApp> {
                         isScanning = true;
                         devices.clear();
                       });
-                      break;
                     case BluetoothCentralState.denied:
                       messenger.showSnackBar(
                         const SnackBar(
@@ -127,7 +123,6 @@ class _MyAppState extends State<MyApp> {
                           ),
                         ),
                       );
-                      break;
                     case BluetoothCentralState.permanentlyDenied:
                       messenger.showSnackBar(
                         const SnackBar(
@@ -136,7 +131,6 @@ class _MyAppState extends State<MyApp> {
                           ),
                         ),
                       );
-                      break;
                     case BluetoothCentralState.restricted:
                       // TODO: Handle this case.
                       break;
@@ -151,7 +145,6 @@ class _MyAppState extends State<MyApp> {
                           ),
                         ),
                       );
-                      break;
                     case BluetoothCentralState.unsupported:
                       messenger.showSnackBar(
                         const SnackBar(
@@ -160,7 +153,6 @@ class _MyAppState extends State<MyApp> {
                           ),
                         ),
                       );
-                      break;
                     case BluetoothCentralState.unknown:
                       messenger.showSnackBar(
                         const SnackBar(
@@ -169,7 +161,6 @@ class _MyAppState extends State<MyApp> {
                           ),
                         ),
                       );
-                      break;
                   }
                 },
               ),
