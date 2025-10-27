@@ -24,7 +24,6 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
@@ -33,6 +32,8 @@ class _MyAppState extends State<MyApp> {
     });
 
     FlutterBleCentral().onScanError?.listen((event) {
+      if (!mounted) return;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -48,8 +49,9 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  Future<void> _requestPermissions() async {
-    final hasPermission = await FlutterBleCentral().hasPermission();
+  Future<void> _requestPermissions([BluetoothCentralState? state]) async {
+    final hasPermission = state ?? await FlutterBleCentral().hasPermission();
+
     switch (hasPermission) {
       case BluetoothCentralState.denied:
         _messangerKey.currentState?.showSnackBar(
@@ -61,8 +63,9 @@ class _MyAppState extends State<MyApp> {
           ),
         );
 
-        await _requestPermissions();
-        break;
+        final result = await FlutterBleCentral().requestPermission();
+        unawaited(_requestPermissions(result));
+        return;
       default:
         _messangerKey.currentState?.showSnackBar(
           SnackBar(

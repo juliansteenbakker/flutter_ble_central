@@ -15,8 +15,6 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import dev.steenbakker.flutter_ble_central.models.State
-import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.MethodChannel
 
 class FlutterBleCentralManager(context: Context) {
 
@@ -28,9 +26,7 @@ class FlutterBleCentralManager(context: Context) {
   var mBluetoothManager: BluetoothManager? = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
   var mBluetoothLeScanner: BluetoothLeScanner? = null
 
-  var pendingResultForActivityResult: MethodChannel.Result? = null
-  var pendingResultForPermissionResult: MethodChannel.Result? = null
-  var permissionResultCallback: ((Boolean) -> Unit)? = null
+  var permissionResultCallback: ((State) -> Unit)? = null
 
 
   fun startScan(scanSettings: ScanSettings, scanCallback: ScanCallback) {
@@ -73,48 +69,14 @@ class FlutterBleCentralManager(context: Context) {
   }
 
 
-  fun enableBluetoothProcedure(activity: Activity) {
-    if (isBluetoothEnabled()) return
-
-    var permissions = getMissingPermissions(activity)
-
-    if (!permissions.isEmpty()) {
-      requestPermission(permissions)
-      return;
-    }
-  }
-
-  /**
-   * Enables bluetooth with a dialog or without, and by checking permissions first.
-   */
-  fun checkAndEnableBluetooth(shouldAsk: Boolean): Boolean {
-    return if (mBluetoothManager!!.adapter.isEnabled) {
-      true
-    } else {
-      pendingResultForPermissionResult = result
-      val hasPermission = requestPermission(activityBinding.activity, result)
-      if (hasPermission == State.Granted) enableBluetooth(shouldAsk, result, activityBinding, false)
-      false
-    }
-  }
-
   fun isBluetoothEnabled(): Boolean {
-    return mBluetoothManager!!.adapter.isEnabled;
+    return mBluetoothManager?.adapter?.isEnabled ?: false
   }
 
-  fun askAndEnableBluetooth(activityBinding: ActivityPluginBinding) {
-    ActivityCompat.startActivityForResult(
-      activityBinding.activity,
-      Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
-      REQUEST_ENABLE_BT,
-      null
-    )
-  }
-
-  fun enableBluetooth(ask: Boolean, activityBinding: ActivityPluginBinding) {
-    if (ask && pendingResultForActivityResult == null) {
+  fun enableBluetooth(activity: Activity, ask: Boolean) {
+    if (ask) {
       ActivityCompat.startActivityForResult(
-        activityBinding.activity,
+        activity,
         Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
         REQUEST_ENABLE_BT,
         null
@@ -158,68 +120,36 @@ class FlutterBleCentralManager(context: Context) {
   }
 
 
-  fun requestPermission(
-    activity: Activity,
-    permissions: List<String>
-  ) {
-    // Request permissions asynchronously
-    ActivityCompat.requestPermissions(
-      activity,
-      permissions.toTypedArray(),
-      REQUEST_PERMISSION_BT
-    )
-  }
+  /**
+   * Check permission status and request if needed
+   * Returns the current permission state
+   * If permissions need to be requested, will trigger the permission dialog and return State.Denied initially
+   */
+  fun requestPermission(activity: Activity, callback: ((State) -> Unit)?): State {
+    val missingPermissions = getMissingPermissions(activity)
 
-
-  fun requestPermission(activity: Activity, onPermissionReceived: (Boolean) -> Unit): State {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      if (!hasBluetoothScanPermission(activity) || !hasBluetoothConnectPermission(activity)) {
-        permissionResultCallback = onPermissionReceived
-        ActivityCompat.requestPermissions(
-          activity,
-          arrayOf(
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN
-          ),
-          REQUEST_PERMISSION_BT
-        )
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_SCAN) ||
-          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.BLUETOOTH_CONNECT)) {
-          return State.Denied
-        }
-        return State.PermanentlyDenied
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      if (!hasLocationCoarsePermission(activity) || !hasLocationFinePermission(activity)) {
-          permissionResultCallback = onPermissionReceived
-          ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(
-              Manifest.permission.ACCESS_FINE_LOCATION,
-              Manifest.permission.ACCESS_COARSE_LOCATION
-            ),
-            REQUEST_PERMISSION_BT
-          )
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION) ||
-          ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-          return State.Denied
-        }
-        return State.PermanentlyDenied
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      if (!hasLocationCoarsePermission(activity)) {
-          permissionResultCallback = onPermissionReceived
-          ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
-            REQUEST_PERMISSION_BT
-          )
-        if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-          return State.Denied
-        }
-        return State.PermanentlyDenied
-      }
+    if (missingPermissions.isEmpty()) {
+      return State.Granted
     }
-    return State.Granted
+
+    // If callback is provided, store it and request permissions
+    if (callback != null) {
+      permissionResultCallback = callback
+      ActivityCompat.requestPermissions(
+        activity,
+        missingPermissions.toTypedArray(),
+        REQUEST_PERMISSION_BT
+      )
+
+      // Check if we should show rationale (user previously denied)
+      val shouldShowRationale = missingPermissions.any { permission ->
+        ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
+      }
+
+      return if (shouldShowRationale) State.Denied else State.PermanentlyDenied
+    }
+
+    // No callback provided, just return the state without requesting
+    return State.Denied
   }
 }

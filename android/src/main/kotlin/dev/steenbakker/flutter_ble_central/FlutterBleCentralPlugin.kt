@@ -109,7 +109,11 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
 
   private fun handleEnableBluetooth(call: MethodCall, result: Result) {
     if (activityBinding != null) {
-      val isEnabled = flutterBleCentralManager!!.checkAndEnableBluetooth(call.arguments as Boolean, (result) ->, activityBinding!!)
+      val shouldAsk = call.arguments as Boolean
+      val isEnabled = flutterBleCentralManager!!.isBluetoothEnabled()
+      if (!isEnabled) {
+        flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, shouldAsk)
+      }
       safeResult(result) {
         result.success(isEnabled)
       }
@@ -121,8 +125,18 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   }
 
   private fun handleRequestPermission(result: Result) {
-    flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
-    // result handling is done internally
+    val state = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity) { state ->
+      safeResult(result) {
+        result.success(state.ordinal)
+      }
+    }
+    // If already granted, return immediately
+    if (state == State.Granted) {
+      safeResult(result) {
+        result.success(state.ordinal)
+      }
+    }
+    // Otherwise callback will handle the result
   }
 
   private fun handleHasPermission(result: Result) {
@@ -223,10 +237,27 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       // Can't check whether ble is turned off or not supported, see https://stackoverflow.com/questions/32092902/why-ismultipleadvertisementsupported-returns-false-when-getbluetoothleadverti
       // !bluetoothAdapter.isMultipleAdvertisementSupported
       flutterBleCentralManager!!.mBluetoothLeScanner = flutterBleCentralManager!!.mBluetoothManager!!.adapter.bluetoothLeScanner
-      val hasPermissions = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity, result)
+      val hasPermissions = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity) { state ->
+        // Handle permission result callback
+        if (state == State.Granted) {
+          if (!flutterBleCentralManager!!.isBluetoothEnabled()) {
+            flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, true)
+          } else if (startStopCall != null && startStopResult != null) {
+            onMethodCall(startStopCall!!, startStopResult!!)
+            startStopCall = null
+            startStopResult = null
+          }
+        } else {
+          safeResult(result) {
+            result.success(state.ordinal)
+          }
+          startStopCall = null
+          startStopResult = null
+        }
+      }
       if (hasPermissions == State.Granted) {
-        if (!flutterBleCentralManager!!.mBluetoothManager!!.adapter.isEnabled) {
-          flutterBleCentralManager!!.enableBluetooth(true, result, activityBinding!!, true)
+        if (!flutterBleCentralManager!!.isBluetoothEnabled()) {
+          flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, true)
         } else {
           return State.Ready
         }
@@ -246,7 +277,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       for (i in permissions.indices) {
         val permission = permissions[i]
         val grantResult = grantResults[i]
-        if (permission == Manifest.permission.BLUETOOTH_CONNECT || permission == Manifest.permission.BLUETOOTH_ADVERTISE || permission == Manifest.permission.ACCESS_FINE_LOCATION || permission == Manifest.permission.ACCESS_COARSE_LOCATION) {
+        if (permission == Manifest.permission.BLUETOOTH_CONNECT ||
+            permission == Manifest.permission.BLUETOOTH_SCAN ||
+            permission == Manifest.permission.ACCESS_FINE_LOCATION ||
+            permission == Manifest.permission.ACCESS_COARSE_LOCATION) {
           if (grantResult == PackageManager.PERMISSION_DENIED) {
             if (ActivityCompat.shouldShowRequestPermissionRationale(activityBinding!!.activity, permission)) {
               shouldShowRationale = true
@@ -256,24 +290,15 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
         }
       }
 
-      if (shouldShowRationale) {
-        flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Denied.ordinal)
-      } else if (!flutterBleCentralManager!!.mBluetoothManager!!.adapter.isEnabled && startStopCall != null && hasAllPermissions) {
-        flutterBleCentralManager!!.enableBluetooth(true, flutterBleCentralManager?.pendingResultForPermissionResult, activityBinding!!, true)
-      } else {
-        if (hasAllPermissions) {
-          if (startStopCall != null) {
-            onMethodCall(startStopCall!!, flutterBleCentralManager!!.pendingResultForPermissionResult!!)
-            startStopCall = null
-            flutterBleCentralManager?.pendingResultForPermissionResult = null
-          } else {
-            flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.Granted.ordinal)
-          }
-        } else {
-          flutterBleCentralManager?.pendingResultForPermissionResult?.success(State.PermanentlyDenied.ordinal)
-        }
-        flutterBleCentralManager?.pendingResultForPermissionResult = null
+      val resultState = when {
+        hasAllPermissions -> State.Granted
+        shouldShowRationale -> State.Denied
+        else -> State.PermanentlyDenied
       }
+
+      // Invoke the callback
+      flutterBleCentralManager?.permissionResultCallback?.invoke(resultState)
+      flutterBleCentralManager?.permissionResultCallback = null
     }
 
     return true
@@ -303,23 +328,18 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     resultCode: Int,
     data: Intent?
   ): Boolean {
-    if (requestCode != REQUEST_PERMISSION_BT) return false
-
-    val deniedPermissions = permissions
-      .zip(grantResults.toTypedArray())
-      .filter { it.second != PackageManager.PERMISSION_GRANTED }
-
-    val resultState = when {
-      deniedPermissions.isEmpty() -> State.Granted
-      deniedPermissions.any { permission ->
-        ActivityCompat.shouldShowRequestPermissionRationale(activity, permission.first)
-      } -> State.Denied
-
-      else -> State.PermanentlyDenied
+    if (requestCode == REQUEST_PERMISSION_BT) {
+      // Handle bluetooth enable result
+      if (resultCode == Activity.RESULT_OK) {
+        // Bluetooth was enabled
+        if (startStopCall != null && startStopResult != null) {
+          onMethodCall(startStopCall!!, startStopResult!!)
+          startStopCall = null
+          startStopResult = null
+        }
+      }
+      return true
     }
-
-    flutterBleCentralManager?.pendingResultForPermissionResult?.success(resultState.ordinal)
-    flutterBleCentralManager?.pendingResultForPermissionResult = null
-    return true
+    return false
   }
 }
