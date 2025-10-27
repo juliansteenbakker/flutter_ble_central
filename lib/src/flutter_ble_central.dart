@@ -5,7 +5,6 @@
  */
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -176,7 +175,8 @@ class FlutterBleCentral {
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       final raw = Map<String, dynamic>.from(data as Map);
 
-      Uint8List manufacturerIdAndData = raw["manufacturerSpecificData"] as Uint8List;
+      Uint8List manufacturerIdAndData =
+          raw["manufacturerSpecificData"] as Uint8List;
 
       if (Platform.isWindows) {
         final int manufacturerId = raw["manufacturerId"] as int;
@@ -191,7 +191,7 @@ class FlutterBleCentral {
       if (manufacturerIdAndData.length >= 3) {
         manufacturerSpecificData = {
           "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
-          manufacturerIdAndData.sublist(2),
+              manufacturerIdAndData.sublist(2),
         };
       }
 
@@ -211,5 +211,4 @@ class FlutterBleCentral {
 
     sink.add(result);
   }
-
 }

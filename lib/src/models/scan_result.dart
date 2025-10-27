@@ -67,21 +67,22 @@ class ScanResult {
 
       if (value is Map) {
         // fallback for mixed key types
-        return MapEntry(castKey, deepCastMap(Map<Object?, Object?>.from(value)));
+        return MapEntry(
+            castKey, deepCastMap(Map<Object?, Object?>.from(value)));
       }
 
       if (value is List) {
-        return MapEntry(castKey, value.map((e) {
-          if (e is Map) {
-            return deepCastMap(Map<Object?, Object?>.from(e));
-          }
-          return e;
-        }).toList());
+        return MapEntry(
+            castKey,
+            value.map((e) {
+              if (e is Map) {
+                return deepCastMap(Map<Object?, Object?>.from(e));
+              }
+              return e;
+            }).toList());
       }
 
       return MapEntry(castKey, value);
     });
   }
-
-
 }
