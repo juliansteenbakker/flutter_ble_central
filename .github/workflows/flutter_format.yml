@@ -22,7 +22,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Flutter ${{ matrix.flutter.name }}
-        uses: subosito/flutter-action@v2.12.0
+        uses: subosito/flutter-action@v2.21.0
         with:
           flutter-version-file: ${{ matrix.flutter.use_version_file && 'pubspec.yaml' || '' }}
 
