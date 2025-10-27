@@ -19,7 +19,7 @@ class ScanErrorHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding)
         eventChannel.setStreamHandler(this)
     }
 
-    fun publishScanError(scanError: Int) {
+    fun publish(scanError: Int) {
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(scanError)
         }

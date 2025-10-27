@@ -94,7 +94,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   private fun handleStop(result: Result) {
     if (scanCallback != null) {
       flutterBleCentralManager?.stopScan(scanCallback!!)
-      scanCallback?.scanResultHandler?.stop = true
     }
     safeResult(result) {
       result.success(State.Ready.ordinal)
@@ -158,7 +157,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     }
   }
 
-
   private fun safeResult(result: Result, block: () -> Unit) {
     Handler(Looper.getMainLooper()).post {
       try {
@@ -168,7 +166,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
       }
     }
   }
-
 
   private fun startScan(call: MethodCall, result: Result) {
     if (call.arguments !is Map<*, *>) {
@@ -192,6 +189,10 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
     (arguments["reportDelay"] as Int?)?.let { scanSettings.setReportDelay((arguments["reportDelay"] as Int).toLong()) }
     (arguments["scanMode"] as Int?)?.let { scanSettings.setScanMode((arguments["scanMode"] as Int)) }
 
+    // Set lightweight scan result mode if specified
+    val useLightweightScanResult = (arguments["useLightweightScanResult"] as Boolean?) ?: false
+    scanResultHandler.setUseLightweightScanResult(useLightweightScanResult)
+
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
 
     try {
@@ -208,7 +209,6 @@ class FlutterBleCentralPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
   }
 
   private fun checkBluetoothState(result: Result): State {
-
     if (flutterBleCentralManager!!.mBluetoothManager == null || flutterBleCentralManager!!.mBluetoothManager?.adapter == null) {
       result.success(State.Unsupported.ordinal)
       startStopCall = null

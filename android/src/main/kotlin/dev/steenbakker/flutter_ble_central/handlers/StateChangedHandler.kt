@@ -20,7 +20,7 @@ class StateChangedHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBindi
         eventChannel.setStreamHandler(this)
     }
 
-    private fun publishCentralState(state: CentralState) {
+    private fun publish(state: CentralState) {
         this.state = state
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(state.ordinal)
@@ -29,7 +29,7 @@ class StateChangedHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBindi
 
     override fun onListen(event: Any?, eventSink: EventChannel.EventSink?) {
         this.eventSink = eventSink
-        publishCentralState(state)
+        publish(state)
     }
 
     override fun onCancel(event: Any?) {
