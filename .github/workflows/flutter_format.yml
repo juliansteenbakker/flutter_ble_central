@@ -13,10 +13,10 @@ jobs:
     strategy:
       matrix:
         flutter:
-          - name: 'From flutter-version-file'
-            use_version_file: true
           - name: 'Latest stable'
             use_version_file: false
+          - name: 'From flutter-version-file'
+            use_version_file: true
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter ${{ matrix.flutter.name }}
         uses: subosito/flutter-action@v2.21.0
         with:
-          channel: 'stable'
+          channel: ${{ matrix.flutter.use_version_file && 'any' || '' }}
           flutter-version-file: ${{ matrix.flutter.use_version_file && 'pubspec.yaml' || '' }}
 
       - name: Flutter version
