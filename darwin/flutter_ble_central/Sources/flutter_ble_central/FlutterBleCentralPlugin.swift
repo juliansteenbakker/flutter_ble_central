@@ -118,7 +118,7 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
         // Only start scanning if Bluetooth is ready
         if state == .Ready || state == .Granted {
             flutterBleCentralManager.startScan(with: nil)
-            result(CentralState.Ready.rawValue)
+            result(FlutterBleCentralState.Ready.rawValue)
         } else {
             // Return the error state (TurnedOff, Denied, Unsupported, etc.)
             result(state.rawValue)
@@ -147,6 +147,6 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
      */
     private func stopScan(_ result: @escaping FlutterResult) {
         flutterBleCentralManager.stopScan()
-        result(CentralState.Ready.rawValue)
+        result(FlutterBleCentralState.Ready.rawValue)
     }
 }

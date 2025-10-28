@@ -12,7 +12,7 @@ package dev.steenbakker.flutter_ble_central.models
  *
  * @property value The integer value used when serializing state to Flutter.
  */
-enum class State(val value: Int) {
+enum class FlutterBleCentralState(val value: Int) {
 
     /**
      * The user granted access to the requested feature.

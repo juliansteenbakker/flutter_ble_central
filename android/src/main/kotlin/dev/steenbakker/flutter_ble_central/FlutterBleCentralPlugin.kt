@@ -16,7 +16,7 @@ import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.RE
 import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.REQUEST_PERMISSION_BT
 import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
-import dev.steenbakker.flutter_ble_central.models.State
+import dev.steenbakker.flutter_ble_central.models.FlutterBleCentralState
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -106,7 +106,7 @@ class FlutterBleCentralPlugin :
 
   private fun handleStart(call: MethodCall, result: Result) {
     if (flutterBleCentralManager == null) {
-      safeResult(result) { result.success(State.Unsupported.ordinal) }
+      safeResult(result) { result.success(FlutterBleCentralState.Unsupported.ordinal) }
       return
     }
 
@@ -174,7 +174,7 @@ class FlutterBleCentralPlugin :
     try {
       flutterBleCentralManager?.startScan(scanSettings.build(), scanCallback!!)
       safeResult(result) {
-        result.success(State.Ready.ordinal)
+        result.success(FlutterBleCentralState.Ready.ordinal)
       }
     } catch (e: Exception) {
       safeResult(result) {
@@ -192,7 +192,7 @@ class FlutterBleCentralPlugin :
       scanCallback = null
     }
     safeResult(result) {
-      result.success(State.Ready.ordinal)
+      result.success(FlutterBleCentralState.Ready.ordinal)
     }
   }
 
@@ -332,15 +332,15 @@ class FlutterBleCentralPlugin :
       val resultState = when {
         hasAllPermissions -> {
           flutterBleCentralManager?.setPermissionGranted(activity, true)
-          State.Granted
+          FlutterBleCentralState.Granted
         }
         shouldShowRationale -> {
           flutterBleCentralManager?.setPermissionGranted(activity, false)
-          State.Denied
+          FlutterBleCentralState.Denied
         }
         else -> {
           flutterBleCentralManager?.setPermissionGranted(activity, false)
-          State.PermanentlyDenied
+          FlutterBleCentralState.PermanentlyDenied
         }
       }
 
@@ -365,7 +365,7 @@ class FlutterBleCentralPlugin :
   }
 
   override fun onDetachedFromActivity() {
-    flutterBleCentralManager?.permissionResultCallback?.invoke(State.Denied)
+    flutterBleCentralManager?.permissionResultCallback?.invoke(FlutterBleCentralState.Denied)
     flutterBleCentralManager?.permissionResultCallback = null
     activityBinding = null
   }
