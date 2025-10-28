@@ -9,24 +9,36 @@ import androidx.core.util.isNotEmpty
 import androidx.core.util.size
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.iterator
-import kotlin.concurrent.thread
 
+/**
+ * Handles publishing Bluetooth LE scan results from the native Android layer
+ * to the Flutter side via an [EventChannel].
+ *
+ * Responsibilities:
+ * - Convert [ScanResult] objects to `Map<String, Any?>` suitable for Flutter.
+ * - Optionally publish "lightweight" scan results for improved performance.
+ * - Send results through the `"dev.steenbakker.flutter_ble_central/scan_result"` channel.
+ * - Log timing statistics for performance monitoring.
+ *
+ * **Lightweight mode** excludes certain fields (e.g., `rssi`, timestamps, bond state)
+ * to reduce serialization overhead and increase throughput for fast scans.
+ *
+ * @param flutterPluginBinding The plugin binding used to access the Flutter binary messenger.
+ */
 class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) : EventChannel.StreamHandler {
 
+    /** The current active Flutter event sink. */
     private var eventSink: EventChannel.EventSink? = null
+
+    /** Indicates if the stream is active. */
     private var isRunning = false
+
+    /** Whether to send lightweight scan results. */
     private var useLightweightScanResult = false
 
+    /** Event channel used to communicate scan results to Flutter. */
     private val eventChannel = EventChannel(
         flutterPluginBinding.binaryMessenger,
         "dev.steenbakker.flutter_ble_central/scan_result"
@@ -36,19 +48,47 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         eventChannel.setStreamHandler(this)
     }
 
+    /**
+     * Enables or disables lightweight scan result mode.
+     *
+     * When enabled, only a minimal subset of fields is sent to Flutter.
+     * This improves performance when handling a high volume of scan results.
+     *
+     * @param useLightweight Whether to use lightweight scan result serialization.
+     */
     fun setUseLightweightScanResult(useLightweight: Boolean) {
         useLightweightScanResult = useLightweight
     }
 
+    /**
+     * Called when Flutter begins listening to the scan result event stream.
+     *
+     * @param arguments Optional arguments passed from Flutter.
+     * @param events The event sink for sending data to Flutter.
+     */
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         this.eventSink = events
     }
 
+    /**
+     * Called when Flutter cancels its subscription to the scan result stream.
+     *
+     * @param arguments Optional arguments passed from Flutter.
+     */
     override fun onCancel(arguments: Any?) {
         isRunning = false
         this.eventSink = null
     }
 
+    /**
+     * Publishes a scan result to the Flutter side.
+     *
+     * The result is converted to a map, then sent on the main thread
+     * (required by Flutter's event channel API). Timing statistics
+     * are logged for performance monitoring.
+     *
+     * @param scanResult The BLE scan result to be sent.
+     */
     fun publish(scanResult: ScanResult) {
         val startTime = System.currentTimeMillis()
         val mapped = if (useLightweightScanResult) {
@@ -56,6 +96,7 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         } else {
             scanResultToMap(scanResult)
         }
+
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(mapped)
             val duration = System.currentTimeMillis() - startTime
@@ -63,10 +104,21 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         }
     }
 
+    /**
+     * Utility object for tracking and logging publishing performance.
+     *
+     * Keeps a running total of time spent publishing results and computes
+     * average latency per call.
+     */
     object PublishTimingStats {
-        val totalTime = AtomicLong(0)
-        val callCount = AtomicInteger(0)
+        private val totalTime = AtomicLong(0)
+        private val callCount = AtomicInteger(0)
 
+        /**
+         * Logs the time taken to process and publish a scan result.
+         *
+         * @param durationMs Duration of the publish operation in milliseconds.
+         */
         fun logTime(durationMs: Long) {
             totalTime.addAndGet(durationMs)
             val count = callCount.incrementAndGet()
@@ -75,6 +127,17 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         }
     }
 
+    /**
+     * Converts a full [ScanResult] into a Flutter-compatible map.
+     *
+     * Includes:
+     * - Device information (address, name, type, bond state)
+     * - Advertising record (flags, bytes, manufacturer data, service UUIDs/data)
+     * - RSSI, timestamp, and connectable flag
+     *
+     * @param scanResult The scan result to convert.
+     * @return A map suitable for sending over an event channel.
+     */
     private fun scanResultToMap(scanResult: ScanResult): Map<String, Any?> {
         val device = scanResult.device
         val scanRecord = scanResult.scanRecord
@@ -128,6 +191,19 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         )
     }
 
+    /**
+     * Converts a [ScanResult] into a lightweight map with minimal fields.
+     *
+     * Includes only:
+     * - Device address
+     * - Manufacturer-specific data
+     * - Service UUIDs
+     *
+     * Used to reduce payload size and improve performance for high-frequency scanning.
+     *
+     * @param scanResult The scan result to convert.
+     * @return A simplified map.
+     */
     private fun scanResultToMapLight(scanResult: ScanResult): Map<String, Any?> {
         val device = scanResult.device
         val scanRecord = scanResult.scanRecord
@@ -137,7 +213,6 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         )
 
         val scanRecordMap = mutableMapOf<String, Any?>().apply {
-
             scanRecord?.manufacturerSpecificData?.takeIf { it.isNotEmpty() }?.let { data ->
                 val manufacturerMap = mutableMapOf<String, ByteArray>()
                 for (i in 0 until data.size) {
@@ -149,7 +224,6 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
             scanRecord?.serviceUuids?.takeIf { it.isNotEmpty() }?.let { uuids ->
                 this["serviceUuids"] = uuids.map { it.toString() }
             }
-
         }
 
         return mapOf(
