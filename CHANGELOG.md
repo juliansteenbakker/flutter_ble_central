@@ -1,3 +1,8 @@
+## 0.1.0
+
+- [Android] Added useLightweightScanResult for android to improve fast scanning.
+- Updated dependencies
+
 ## 0.0.8
 - [macOS] Fixed build errors.
 
