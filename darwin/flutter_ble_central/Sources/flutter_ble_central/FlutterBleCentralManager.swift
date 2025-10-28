@@ -57,29 +57,7 @@ final class FlutterBleCentralManager {
             delegate:self.centralManagerDelegate,
             queue: nil
         )
-        
-//        if #available(iOS 10.0, *) {
-//
-//
-//            self.centralManager = CBCentralManager(
-//                delegate:self.centralManagerDelegate,
-//                queue: nil
-//            )
-//
-//        } else {
-//            self.centralManager = CBCentralManager(
-//                delegate: LegacyCentralManagerDelegate(
-//                    onStateChange: { state in
-//                        stateChangedHandler.publishLegacyPeripheralState(state: state)
-//                    },
-//                    onDiscovery: {CBPeripheral, AdvertisementData, RSSI in
-//                        scanResultHandler.publishScanResult(advertiseData: AdvertisementData, rssi: 3)
-//                    }
-//                ),
-//                queue: nil
-//            )
-//        }
-        
+
     }
 
     func startScan(with services: [ServiceID]?) {
@@ -97,6 +75,17 @@ final class FlutterBleCentralManager {
         centralManager.stopScan()
         isScanning = false
     }
+
+        var hasPermissions: Bool {
+            if #available(iOS 13.1, *) {
+                return CBCentralManager.authorization == .allowedAlways
+            } else if #available(iOS 13.0, *) {
+                return centralManager.authorization == .allowedAlways
+            }
+
+            // Before iOS 13, Bluetooth permissions are not required
+            return true
+        }
 
     private enum Failure: Error, CustomStringConvertible {
 

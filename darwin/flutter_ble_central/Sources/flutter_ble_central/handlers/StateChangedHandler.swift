@@ -7,7 +7,13 @@
 
 import Foundation
 import CoreBluetooth
-import FlutterMacOS
+
+#if os(iOS)
+  import Flutter
+  import UIKit
+#else
+  import FlutterMacOS
+#endif
 
 
 public class StateChangedHandler: NSObject, FlutterStreamHandler {
@@ -19,8 +25,13 @@ public class StateChangedHandler: NSObject, FlutterStreamHandler {
     private let eventChannel: FlutterEventChannel
 
     init(registrar: FlutterPluginRegistrar) {
+#if os(iOS)
+        let messenger = registrar.messenger()
+#else
+        let messenger = registrar.messenger
+#endif
         eventChannel = FlutterEventChannel(name: "dev.steenbakker.flutter_ble_peripheral/ble_state_changed",
-                                           binaryMessenger: registrar.messenger)
+                                           binaryMessenger: messenger)
         super.init()
         eventChannel.setStreamHandler(self)
     }

@@ -18,3 +18,17 @@ For help getting started with Flutter, view our
 [online documentation](https://flutter.dev/docs), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+
+
+| Action                       | FlutterBleCentral       | FlutterBlePeripheral                   |
+|------------------------------|-------------------------|----------------------------------------|
+| Scanning for devices         | ✅ Yes                   | ❌ No                                   |
+| Advertising                  | ❌ No                    | ✅ Yes                                  |
+| Connecting to other devices  | ✅ Yes                   | ❌ No (it accepts connections)          |
+| Hosting GATT services        | ❌ No                    | ✅ Yes                                  |
+| Accessing GATT services      | ✅ Yes                   | ❌ No                                   |
+| **Reading characteristics**  | ✅ Yes (from peripheral) | ❌ No (it provides data if read)        |
+| **Writing characteristics**  | ✅ Yes (to peripheral)   | ❌ No (it receives writes from central) |
+| Subscribing to notifications | ✅ Yes                   | ❌ No (it sends notifications)          |
+****
+

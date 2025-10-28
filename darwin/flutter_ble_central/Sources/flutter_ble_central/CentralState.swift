@@ -27,5 +27,5 @@ enum CentralState: Int {
     case Unsupported = 6
     case Unknown = 7
     case Ready = 8
-    
+
 }

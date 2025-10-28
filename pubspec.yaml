@@ -28,7 +28,9 @@ flutter:
         pluginClass: FlutterBleCentralPlugin
       ios:
         pluginClass: FlutterBleCentralPlugin
+        sharedDarwinSource: true
       macos:
         pluginClass: FlutterBleCentralPlugin
+        sharedDarwinSource: true
       windows:
         pluginClass: FlutterBleCentralPluginCApi
