@@ -106,11 +106,23 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
     /**
      Starts BLE scanning using the Flutter BLE Central Manager.
 
+     This method checks both permissions and Bluetooth adapter state before starting the scan,
+     similar to the Android implementation.
+
      - Parameter result: The Flutter result callback used to send back the operation state.
      */
     private func startScan(_ result: @escaping FlutterResult) {
-        flutterBleCentralManager.startScan(with: nil)
-        result(CentralState.Ready.rawValue)
+        // Check combined state (permissions + Bluetooth adapter state)
+        let state = flutterBleCentralManager.getCombinedState()
+
+        // Only start scanning if Bluetooth is ready
+        if state == .Ready || state == .Granted {
+            flutterBleCentralManager.startScan(with: nil)
+            result(CentralState.Ready.rawValue)
+        } else {
+            // Return the error state (TurnedOff, Denied, Unsupported, etc.)
+            result(state.rawValue)
+        }
     }
 
     /**

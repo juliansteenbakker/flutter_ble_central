@@ -143,6 +143,53 @@ final class FlutterBleCentralManager {
     }
 
     /**
+     Returns the current Bluetooth adapter state mapped to `CentralState`.
+
+     This checks the actual hardware/software state of the Bluetooth adapter,
+     not just the authorization status.
+
+     - Returns: A `CentralState` representing the current adapter state.
+     */
+    var bluetoothState: CentralState {
+        switch centralManager.state {
+        case .poweredOn:
+            return .Ready
+        case .poweredOff:
+            return .TurnedOff
+        case .resetting:
+            return .Unknown
+        case .unauthorized:
+            return .Denied
+        case .unsupported:
+            return .Unsupported
+        case .unknown:
+            return .Unknown
+        @unknown default:
+            return .Unknown
+        }
+    }
+
+    /**
+     Returns the combined state considering both permissions and Bluetooth adapter state.
+
+     This method checks:
+     1. Permission/authorization status
+     2. Whether Bluetooth is actually powered on
+
+     - Returns: A `CentralState` representing the overall readiness state.
+     */
+    func getCombinedState() -> CentralState {
+        // First check permissions
+        let permState = permissionState
+        if permState != .Granted {
+            return permState
+        }
+
+        // If permissions are granted, check Bluetooth adapter state
+        return bluetoothState
+    }
+
+    /**
      Attempts to request Bluetooth permission by triggering the system dialog if needed.
 
      - Parameter completion: Called with the resulting `CentralState`.
