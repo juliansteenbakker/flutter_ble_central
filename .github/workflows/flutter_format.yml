@@ -32,7 +32,7 @@ jobs:
         with:
           channel: ${{ matrix.flutter.use_version_file && 'any' || '' }}
 #          flutter-version-file: ${{ matrix.flutter.use_version_file && 'pubspec.yaml' || '' }} TODO: enable when upper version is supported
-          flutter-version: ${{ matrix.flutter.use_version_file && '3.10.0' || '' }}
+          flutter-version: ${{ matrix.flutter.use_version_file && '3.22.0' || '' }}
 
       - name: Flutter version
         run: flutter --version
