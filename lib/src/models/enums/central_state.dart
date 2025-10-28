@@ -4,6 +4,7 @@
  * BSD-style license that can be found in the LICENSE file.
  */
 
+/// Central state enum
 enum CentralState {
   /// Status is not (yet) determined.
   unknown,
@@ -27,7 +28,9 @@ enum CentralState {
   connected,
 }
 
+/// Extension on CentralState to get numeric code
 extension PeripheralStateExtension on CentralState {
+  /// Get numeric code for state
   int get code {
     switch (this) {
       case CentralState.unknown:

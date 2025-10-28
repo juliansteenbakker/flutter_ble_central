@@ -7,30 +7,10 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'scan_record.g.dart';
 
+/// Represents a BLE scan record
 @JsonSerializable()
 class ScanRecord {
-  final int? advertiseFlags;
-
-  @Uint8ListMapIntConverter()
-  final Map<int, Uint8List>? advertisingDataMap;
-
-  @Uint8ListConverter()
-  final Uint8List? bytes;
-
-  final String? deviceName;
-
-  @Uint8ListMapIntConverter()
-  final Map<int, Uint8List>? manufacturerSpecificData;
-
-  @Uint8ListMapStringConverter()
-  final Map<String, Uint8List>? serviceData;
-
-  final List<String?>? serviceSolicitationUuids;
-
-  final List<String?>? serviceUuids;
-
-  final int? txPowerLevel;
-
+  /// Creates a ScanRecord
   ScanRecord({
     this.advertiseFlags,
     this.advertisingDataMap,
@@ -43,8 +23,41 @@ class ScanRecord {
     this.txPowerLevel,
   });
 
+  /// Creates a ScanRecord from JSON
   factory ScanRecord.fromJson(Map<String, dynamic> json) =>
       _$ScanRecordFromJson(json);
 
+  /// The advertise flags
+  final int? advertiseFlags;
+
+  /// The advertising data map
+  @Uint8ListMapIntConverter()
+  final Map<int, Uint8List>? advertisingDataMap;
+
+  /// The raw bytes of the scan record
+  @Uint8ListConverter()
+  final Uint8List? bytes;
+
+  /// The device name
+  final String? deviceName;
+
+  /// Manufacturer specific data
+  @Uint8ListMapIntConverter()
+  final Map<int, Uint8List>? manufacturerSpecificData;
+
+  /// Service data
+  @Uint8ListMapStringConverter()
+  final Map<String, Uint8List>? serviceData;
+
+  /// Service solicitation UUIDs
+  final List<String?>? serviceSolicitationUuids;
+
+  /// Service UUIDs
+  final List<String?>? serviceUuids;
+
+  /// The TX power level
+  final int? txPowerLevel;
+
+  /// Converts this ScanRecord to JSON
   Map<String, dynamic> toJson() => _$ScanRecordToJson(this);
 }

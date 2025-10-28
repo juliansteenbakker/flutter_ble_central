@@ -7,22 +7,43 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'scan_settings.g.dart';
 
-/// A configuration model for controlling Bluetooth LE scan behavior on **Android only**.
+/// A configuration model for controlling Bluetooth LE scan behavior
+/// on **Android only**.
 ///
-/// Mirrors the Android [`ScanSettings`](https://developer.android.com/reference/android/bluetooth/le/ScanSettings)
+/// Mirrors the Android [`ScanSettings`]
+/// (https://developer.android.com/reference/android/bluetooth/le/ScanSettings)
 /// API and exposes the most commonly used parameters for scanning performance,
 /// power usage, and filtering behavior.
 @JsonSerializable()
 class ScanSettings {
-  /// Specifies the scan mode to control the **power consumption** and **latency** of the BLE scan.
+  /// Creates a new [ScanSettings] configuration.
+  ScanSettings({
+    this.scanMode,
+    this.reportDelay,
+    this.callbackType,
+    this.matchMode,
+    this.numOfMatches,
+    this.legacyMode,
+    this.phy,
+    this.useLightweightScanResult,
+  });
+
+  /// Creates a [ScanSettings] instance from a JSON map.
+  factory ScanSettings.fromJson(Map<String, dynamic> json) =>
+      _$ScanSettingsFromJson(json);
+
+  /// Specifies the scan mode to control the **power consumption**
+  /// and **latency** of the BLE scan.
   ///
-  /// A higher scan mode (e.g., `ScanMode.lowLatency`) results in faster scan results but consumes more power.
+  /// A higher scan mode (e.g., `ScanMode.lowLatency`)
+  /// results in faster scan results but consumes more power.
   final ScanMode? scanMode;
 
   /// Specifies the delay (in milliseconds) before scan results are reported.
   ///
   /// - `0`: results are delivered immediately.
-  /// - `> 0`: results are queued and delivered after the requested delay or **5000 ms** (whichever is higher).
+  /// - `> 0`: results are queued and delivered after the requested delay
+  /// or **5000 ms** (whichever is higher).
   ///
   /// Results may be delivered earlier if the internal buffer fills up.
   final int? reportDelay;
@@ -59,7 +80,8 @@ class ScanSettings {
   /// Specifies the **Physical Layer (PHY)** to use during scanning.
   ///
   /// This is only used if [legacyMode] is set to `false`.
-  /// Use `BluetoothAdapter.isLeCodedPhySupported` to check support for LE Coded PHY.
+  /// Use `BluetoothAdapter.isLeCodedPhySupported` to check support
+  /// for LE Coded PHY.
   ///
   /// Attempting to use an unsupported PHY will result in scan failure.
   final Phy? phy;
@@ -70,24 +92,9 @@ class ScanSettings {
   ///   (e.g., `address`, `manufacturerSpecificData`, `serviceUuids`).
   /// - `false` (default): Returns full scan result data.
   ///
-  /// This can improve performance in cases where full result data is not required.
+  /// This can improve performance in cases where full result data
+  /// is not required.
   final bool? useLightweightScanResult;
-
-  /// Creates a new [ScanSettings] configuration.
-  ScanSettings({
-    this.scanMode,
-    this.reportDelay,
-    this.callbackType,
-    this.matchMode,
-    this.numOfMatches,
-    this.legacyMode,
-    this.phy,
-    this.useLightweightScanResult,
-  });
-
-  /// Creates a [ScanSettings] instance from a JSON map.
-  factory ScanSettings.fromJson(Map<String, dynamic> json) =>
-      _$ScanSettingsFromJson(json);
 
   /// Converts this [ScanSettings] instance to a JSON map.
   Map<String, dynamic> toJson() => _$ScanSettingsToJson(this);

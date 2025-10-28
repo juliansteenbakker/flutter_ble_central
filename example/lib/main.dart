@@ -6,7 +6,9 @@ void main() {
   runApp(const MyApp());
 }
 
+/// Example app demonstrating Flutter BLE Central functionality
 class MyApp extends StatefulWidget {
+  /// Creates the example app
   const MyApp({super.key});
 
   @override
@@ -32,9 +34,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   @override
-  void dispose() {
-    _scanResultSub?.cancel();
-    _scanErrorSub?.cancel();
+  Future<void> dispose() async {
+    await _scanResultSub?.cancel();
+    await _scanErrorSub?.cancel();
     super.dispose();
   }
 
@@ -70,12 +72,18 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _checkPermission() async {
     final status = await _ble.hasPermission();
-    _showSnackBar('Permission status: ${status.name}', isError: status != BluetoothCentralState.granted);
+    _showSnackBar(
+      'Permission status: ${status.name}',
+      isError: status != BluetoothCentralState.granted,
+    );
   }
 
   Future<void> _requestPermission() async {
     final status = await _ble.requestPermission();
-    _showSnackBar('Permission status: ${status.name}', isError: status != BluetoothCentralState.granted);
+    _showSnackBar(
+      'Permission status: ${status.name}',
+      isError: status != BluetoothCentralState.granted,
+    );
   }
 
   Future<void> _startScan() async {
@@ -106,8 +114,8 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  void _stopScan() {
-    _ble.stop();
+  Future<void> _stopScan() async {
+    await _ble.stop();
     setState(() {
       _isScanning = false;
     });
@@ -115,8 +123,8 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _startScanFor30s() async {
     await _startScan();
-    await Future.delayed(const Duration(seconds: 30));
-    _stopScan();
+    await Future<void>.delayed(const Duration(seconds: 30));
+    await _stopScan();
   }
 
   @override
@@ -183,25 +191,26 @@ class _MyAppState extends State<MyApp> {
               child: _devices.isEmpty
                   ? const Center(child: Text('No devices found yet'))
                   : ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: _devices.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final scanResult = _devices.values.elementAt(index);
-                  final name = scanResult.scanRecord?.deviceName ?? 'Unknown';
-                  final address = scanResult.device?.address ?? 'N/A';
-                  final rssi = scanResult.rssi ?? 0;
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _devices.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final scanResult = _devices.values.elementAt(index);
+                        final name =
+                            scanResult.scanRecord?.deviceName ?? 'Unknown';
+                        final address = scanResult.device?.address ?? 'N/A';
+                        final rssi = scanResult.rssi ?? 0;
 
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.bluetooth),
-                      title: Text(name),
-                      subtitle: Text('$address\nRSSI: $rssi'),
-                      isThreeLine: true,
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.bluetooth),
+                            title: Text(name),
+                            subtitle: Text('$address\nRSSI: $rssi'),
+                            isThreeLine: true,
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),

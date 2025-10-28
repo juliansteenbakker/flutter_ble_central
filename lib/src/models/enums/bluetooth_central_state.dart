@@ -4,20 +4,23 @@
  * BSD-style license that can be found in the LICENSE file.
  */
 
+/// Bluetooth Central state enum
 enum BluetoothCentralState {
   /// The user granted access to the requested feature.
   granted,
 
-  /// The user denied access to the requested feature, permission needs to be asked first.
+  /// The user denied access to the requested feature,
+  /// permission needs to be asked first.
   denied,
 
   /// Permission to the requested feature is permanently denied,
-  /// the permission dialog will not be shown when requesting this permission.
+  /// the permission dialog will not be shown when requesting permission.
   /// The user may still change the permission status in the settings.
   permanentlyDenied,
 
   /// The OS denied access to the requested feature.
-  /// The user cannot change this app's status, possibly due to active restrictions such as parental controls being in place.
+  /// The user cannot change this app's status, possibly due to active
+  /// restrictions such as parental controls being in place.
   ///
   /// Only supported on iOS.
   restricted,
@@ -28,9 +31,13 @@ enum BluetoothCentralState {
 
   /// Bluetooth is turned off
   turnedOff,
+
+  /// Bluetooth is not supported on this device
   unsupported,
 
   /// The status is unknown
   unknown,
+
+  /// Bluetooth is ready to use
   ready,
 }
