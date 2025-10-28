@@ -45,32 +45,30 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  Future<void> _requestPermissions([BluetoothCentralState? state]) async {
-    final hasPermission = state ?? await FlutterBleCentral().hasPermission();
-    switch (hasPermission) {
-      case BluetoothCentralState.denied:
-        _messengerKey.currentState?.showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(
-              "We don't have permissions, requesting now!",
-            ),
-          ),
-        );
+  Future<void> _hasPermission() async {
+    final hasPermission = await FlutterBleCentral().hasPermission();
+    _messengerKey.currentState?.clearSnackBars();
+    _messengerKey.currentState?.showSnackBar(
+      SnackBar(
+        backgroundColor: hasPermission == BluetoothCentralState.granted ? Colors.green : Colors.red,
+        content: Text(
+          "Permission status: ${hasPermission.name}",
+        ),
+      ),
+    );
+  }
 
-        final result = await FlutterBleCentral().requestPermission();
-        _requestPermissions(result);
-        return;
-      default:
-        _messengerKey.currentState?.showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green,
-            content: Text(
-              'State: $hasPermission!',
-            ),
-          ),
-        );
-    }
+  Future<void> _requestPermissions() async {
+    final hasPermission = await FlutterBleCentral().requestPermission();
+    _messengerKey.currentState?.clearSnackBars();
+    _messengerKey.currentState?.showSnackBar(
+      SnackBar(
+        backgroundColor: hasPermission == BluetoothCentralState.granted ? Colors.green : Colors.red,
+        content: Text(
+          "Permission status: ${hasPermission.name}",
+        ),
+      ),
+    );
   }
 
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -94,6 +92,10 @@ class _MyAppState extends State<MyApp> {
               onPressed: _requestPermissions,
               icon: const Icon(Icons.security),
             ),
+            IconButton(
+              onPressed: _hasPermission,
+              icon: const Icon(Icons.question_mark),
+            ),
             if (isScanning)
               IconButton(
                 icon: const Icon(Icons.pause_circle_filled),
@@ -108,6 +110,7 @@ class _MyAppState extends State<MyApp> {
                 onPressed: () async {
                   final messenger = _messengerKey.currentState!;
                   final state = await FlutterBleCentral().start();
+                  _messengerKey.currentState?.clearSnackBars();
                   switch (state) {
                     case BluetoothCentralState.ready:
                     case BluetoothCentralState.granted:

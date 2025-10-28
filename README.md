@@ -18,6 +18,15 @@ For help getting started with Flutter, view our
 [online documentation](https://flutter.dev/docs), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Permissions
+
+| Situation                            | previouslyRequested | previouslyGranted | rationale | Result              |
+|--------------------------------------|---------------------|-------------------|-----------|---------------------|
+| First time                           | false               | false             | false     | `Denied`            |
+| User denies (no “don’t ask again”)   | true                | false             | true      | `Denied`            |
+| User denies (with “don’t ask again”) | true                | false             | false     | `PermanentlyDenied` |
+| User grants then revokes in settings | true/false          | true              | false     | `Denied`            |
+| Already granted                      | true/false          | true              | n/a       | `Granted`           |
 
 
 | Action                       | FlutterBleCentral       | FlutterBlePeripheral                   |
