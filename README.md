@@ -27,3 +27,17 @@ samples, guidance on mobile development, and a full API reference.
 | User denies (with “don’t ask again”) | true                | false             | false     | `PermanentlyDenied` |
 | User grants then revokes in settings | true/false          | true              | false     | `Denied`            |
 | Already granted                      | true/false          | true              | n/a       | `Granted`           |
+
+
+| Action                       | FlutterBleCentral       | FlutterBlePeripheral                   |
+|------------------------------|-------------------------|----------------------------------------|
+| Scanning for devices         | ✅ Yes                   | ❌ No                                   |
+| Advertising                  | ❌ No                    | ✅ Yes                                  |
+| Connecting to other devices  | ✅ Yes                   | ❌ No (it accepts connections)          |
+| Hosting GATT services        | ❌ No                    | ✅ Yes                                  |
+| Accessing GATT services      | ✅ Yes                   | ❌ No                                   |
+| **Reading characteristics**  | ✅ Yes (from peripheral) | ❌ No (it provides data if read)        |
+| **Writing characteristics**  | ✅ Yes (to peripheral)   | ❌ No (it receives writes from central) |
+| Subscribing to notifications | ✅ Yes                   | ❌ No (it sends notifications)          |
+****
+

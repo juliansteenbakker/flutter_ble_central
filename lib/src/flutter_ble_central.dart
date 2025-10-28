@@ -29,6 +29,14 @@ class FlutterBleCentral {
 
   static const tag = 'flutter_ble_central:';
 
+  /// Enables or disables timing statistics logging for scan result processing.
+  ///
+  /// When enabled, the native handlers will log timing information for each
+  /// scan result publish operation, which is useful for performance monitoring.
+  ///
+  /// Default is `false`.
+  bool enableTimingStats = false;
+
   /// Method Channel used to communicate state with
   final MethodChannel _methodChannel =
       const MethodChannel('dev.steenbakker.flutter_ble_central/method');
@@ -58,22 +66,19 @@ class FlutterBleCentral {
   Future<BluetoothCentralState> start({
     ScanSettings? scanSettings,
   }) async {
+    final settings = (scanSettings ?? ScanSettings()).toJson();
+    settings['enableTimingStats'] = enableTimingStats;
+
     if (Platform.isWindows) {
       try {
-        await _methodChannel.invokeMethod(
-          'start',
-          (scanSettings ?? ScanSettings()).toJson(),
-        );
+        await _methodChannel.invokeMethod('start', settings);
       } on PlatformException catch (e) {
         debugPrint('$tag platform exception: $e');
         return BluetoothCentralState.turnedOff;
       }
       return BluetoothCentralState.ready;
     }
-    final response = await _methodChannel.invokeMethod<int>(
-      'start',
-      (scanSettings ?? ScanSettings()).toJson(),
-    );
+    final response = await _methodChannel.invokeMethod<int>('start', settings);
     return response == null
         ? BluetoothCentralState.unknown
         : BluetoothCentralState.values[response];
@@ -175,40 +180,52 @@ class FlutterBleCentral {
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       final raw = Map<String, dynamic>.from(data as Map);
 
-      Uint8List manufacturerIdAndData =
-          raw["manufacturerSpecificData"] as Uint8List;
+      // Safely extract manufacturer data
+      // Safe conversion of manufacturerSpecificData to Uint8List
+      Uint8List? manufacturerIdAndData;
+      final dynamic mData = raw["manufacturerSpecificData"];
+      if (mData is Uint8List) {
+        manufacturerIdAndData = mData;
+      } else if (mData is List) {
+        manufacturerIdAndData = Uint8List.fromList(mData.cast<int>());
+      }
 
       if (Platform.isWindows) {
-        final int manufacturerId = raw["manufacturerId"] as int;
-        final b = BytesBuilder();
-        final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
-        b.add(l1);
-        b.add(manufacturerIdAndData);
-        manufacturerIdAndData = b.toBytes();
+        final manufacturerId = raw["manufacturerId"] as int?;
+        if (manufacturerId != null && manufacturerIdAndData != null) {
+          final b = BytesBuilder();
+          final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
+          b.add(l1);
+          b.add(manufacturerIdAndData);
+          manufacturerIdAndData = b.toBytes();
+        }
       }
 
       Map<String, dynamic> manufacturerSpecificData = {};
-      if (manufacturerIdAndData.length >= 3) {
-        manufacturerSpecificData = {
-          "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
-              manufacturerIdAndData.sublist(2),
-        };
+      if (manufacturerIdAndData != null && manufacturerIdAndData.length >= 3) {
+        final id = manufacturerIdAndData[0] | (manufacturerIdAndData[1] << 8);
+        final value = manufacturerIdAndData.sublist(2);
+        manufacturerSpecificData = {id.toString(): value};
       }
 
       raw['scanRecord'] = {
         'deviceName': raw['deviceName'],
-        'manufacturerSpecificData': manufacturerSpecificData,
-        'serviceData': raw['serviceData'],
-        'serviceUuids': raw['serviceUuids'],
+        'manufacturerSpecificData': manufacturerSpecificData.isEmpty
+            ? null
+            : manufacturerSpecificData,
+        'serviceData': raw['serviceData'] ?? {},
+        'serviceUuids': raw['serviceUuids'] ?? [],
       };
 
-      raw['device'] = {'address': raw['address']};
+      raw['device'] = {
+        'address': raw['address'] ?? '',
+      };
 
-      result = ScanResult.fromJson(raw);
+      result = ScanResult.fromPlatform(raw);
     } else {
       result = ScanResult.fromPlatform(data as Map<Object?, Object?>);
     }
 
     sink.add(result);
-  }
+    }
 }

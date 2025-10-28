@@ -1,7 +1,7 @@
 package dev.steenbakker.flutter_ble_central
 
-import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
 import android.app.Activity
+import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.Intent
@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.REQUEST_ENABLE_BT
 import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.REQUEST_PERMISSION_BT
 import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
@@ -62,12 +63,6 @@ class FlutterBleCentralPlugin :
   /** Active BLE scan callback, if scanning is ongoing. */
   private var scanCallback: ScanResultCallback? = null
 
-  /** Cached method call for deferred start when permissions or Bluetooth state aren't ready. */
-  private var startStopCall: MethodCall? = null
-
-  /** Cached result for the deferred call. */
-  private var startStopResult: Result? = null
-
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     methodChannel = MethodChannel(
       flutterPluginBinding.binaryMessenger,
@@ -96,14 +91,6 @@ class FlutterBleCentralPlugin :
       return
     }
 
-    // If starting scan, ensure Bluetooth is ready
-    if (call.method == "start") {
-      startStopCall = call
-      startStopResult = result
-      val state = checkBluetoothState(result)
-      if (state != State.Ready) return
-    }
-
     when (call.method) {
       "start" -> handleStart(call, result)
       "stop" -> handleStop(result)
@@ -117,11 +104,83 @@ class FlutterBleCentralPlugin :
     }
   }
 
-  /**
-   * Start BLE scan with the provided settings.
-   */
   private fun handleStart(call: MethodCall, result: Result) {
-    startScan(call, result)
+    if (flutterBleCentralManager == null) {
+      safeResult(result) { result.success(State.Unsupported.ordinal) }
+      return
+    }
+
+    val manager = flutterBleCentralManager!!
+
+    if (activityBinding == null) {
+      result.error("No activity", "Activity is not attached", null)
+      return
+    }
+
+    manager.ensureBluetoothReady(
+      activityBinding!!.activity,
+      onReady = {
+        startScan(call, result)
+      },
+      onError = { state ->
+        safeResult(result) { result.success(state.ordinal) }
+      }
+    )
+  }
+
+  /**
+   * Configures and starts a BLE scan based on arguments received from Flutter.
+   *
+   * @throws IllegalArgumentException if arguments are not a valid map
+   */
+  private fun startScan(call: MethodCall, result: Result) {
+    if (call.arguments !is Map<*, *>) {
+      throw IllegalArgumentException("Arguments are not a map! " + call.arguments)
+    }
+
+    val arguments = call.arguments as Map<*, *>
+
+    val scanSettings = ScanSettings.Builder()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      (arguments["legacyMode"] as Boolean?)?.let {
+        scanSettings.setLegacy(it)
+      }
+      (arguments["phy"] as Int?)?.let {
+        scanSettings.setPhy(it)
+      }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      (arguments["callbackType"] as Int?)?.let { scanSettings.setCallbackType(it) }
+      (arguments["matchMode"] as Int?)?.let { scanSettings.setMatchMode(it) }
+      (arguments["numOfMatches"] as Int?)?.let { scanSettings.setNumOfMatches(it) }
+    }
+
+    (arguments["reportDelay"] as Int?)?.let {
+      scanSettings.setReportDelay(it.toLong())
+    }
+    (arguments["scanMode"] as Int?)?.let {
+      scanSettings.setScanMode(it)
+    }
+
+    val useLightweightScanResult = (arguments["useLightweightScanResult"] as Boolean?) ?: false
+    scanResultHandler.setUseLightweightScanResult(useLightweightScanResult)
+
+    val enableTimingStats = (arguments["enableTimingStats"] as Boolean?) ?: true
+    scanResultHandler.setEnableTimingStats(enableTimingStats)
+
+    scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
+
+    try {
+      flutterBleCentralManager?.startScan(scanSettings.build(), scanCallback!!)
+      safeResult(result) {
+        result.success(State.Ready.ordinal)
+      }
+    } catch (e: Exception) {
+      safeResult(result) {
+        result.error("startScan", e.message, null)
+      }
+    }
   }
 
   /**
@@ -130,6 +189,7 @@ class FlutterBleCentralPlugin :
   private fun handleStop(result: Result) {
     if (scanCallback != null) {
       flutterBleCentralManager?.stopScan(scanCallback!!)
+      scanCallback = null
     }
     safeResult(result) {
       result.success(State.Ready.ordinal)
@@ -157,10 +217,20 @@ class FlutterBleCentralPlugin :
       val shouldAsk = call.arguments as Boolean
       val isEnabled = flutterBleCentralManager!!.isBluetoothEnabled()
       if (!isEnabled) {
-        flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, shouldAsk)
+        if (shouldAsk) {
+          flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity) { bluetoothEnabled ->
+            safeResult(result) {
+              result.success(bluetoothEnabled)
+            }
+          }
+          return
+        } else {
+          flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, null)
+        }
       }
+
       safeResult(result) {
-        result.success(isEnabled)
+        result.success(true)
       }
     } else {
       safeResult(result) {
@@ -231,91 +301,6 @@ class FlutterBleCentralPlugin :
     safeResult(result) {
       result.notImplemented()
     }
-  }
-
-  /**
-   * Configures and starts a BLE scan based on arguments received from Flutter.
-   *
-   * @throws IllegalArgumentException if arguments are not a valid map
-   */
-  private fun startScan(call: MethodCall, result: Result) {
-    if (call.arguments !is Map<*, *>) {
-      throw IllegalArgumentException("Arguments are not a map! " + call.arguments)
-    }
-
-    val arguments = call.arguments as Map<*, *>
-
-    val scanSettings = ScanSettings.Builder()
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      (arguments["legacyMode"] as Boolean?)?.let {
-        scanSettings.setLegacy(it)
-      }
-      (arguments["phy"] as Int?)?.let {
-        scanSettings.setPhy(it)
-      }
-    }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      (arguments["callbackType"] as Int?)?.let { scanSettings.setCallbackType(it) }
-      (arguments["matchMode"] as Int?)?.let { scanSettings.setMatchMode(it) }
-      (arguments["numOfMatches"] as Int?)?.let { scanSettings.setNumOfMatches(it) }
-    }
-
-    (arguments["reportDelay"] as Int?)?.let {
-      scanSettings.setReportDelay(it.toLong())
-    }
-    (arguments["scanMode"] as Int?)?.let {
-      scanSettings.setScanMode(it)
-    }
-
-    val useLightweightScanResult = (arguments["useLightweightScanResult"] as Boolean?) ?: false
-    scanResultHandler.setUseLightweightScanResult(useLightweightScanResult)
-
-    scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
-
-    try {
-      flutterBleCentralManager?.startScan(scanSettings.build(), scanCallback!!)
-      safeResult(result) {
-        result.success(State.Ready.ordinal)
-      }
-    } catch (e: Exception) {
-      safeResult(result) {
-        result.error("startScan", e.message, null)
-      }
-    }
-  }
-
-  /**
-   * Check Bluetooth adapter state and ensure permissions and adapter readiness.
-   *
-   * @return [State.Ready] if everything is OK, or another [State] if not.
-   */
-  private fun checkBluetoothState(result: Result): State {
-    val manager = flutterBleCentralManager ?: return State.Unsupported
-    if (activityBinding == null) {
-      result.error("No activity", "Activity is not attached", null)
-      return State.Denied
-    }
-
-    var returnedState = State.Denied
-    manager.ensureBluetoothReady(
-      activityBinding!!.activity,
-      onReady = {
-        startStopCall?.let { call ->
-          startStopResult?.let { res ->
-            onMethodCall(call, res)
-          }
-        }
-        startStopCall = null
-        startStopResult = null
-        returnedState = State.Ready
-      },
-      onError = { state ->
-        safeResult(result) { result.success(state.ordinal) }
-        returnedState = state
-      }
-    )
-    return returnedState
   }
 
   override fun onRequestPermissionsResult(
@@ -393,18 +378,11 @@ class FlutterBleCentralPlugin :
     resultCode: Int,
     data: Intent?
   ): Boolean {
-    if (requestCode == REQUEST_PERMISSION_BT) {
-      if (resultCode == Activity.RESULT_OK) {
-        // Bluetooth was enabled
-        if (startStopCall != null && startStopResult != null) {
-          onMethodCall(startStopCall!!, startStopResult!!)
-          startStopCall = null
-          startStopResult = null
-        }
-      }
-      return true
+    if (requestCode == REQUEST_ENABLE_BT) {
+      flutterBleCentralManager?.bluetoothEnabledCallback?.invoke(resultCode == Activity.RESULT_OK)
+      flutterBleCentralManager?.bluetoothEnabledCallback = null
     }
-    return false
+    return true
   }
 
   /**
