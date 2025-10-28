@@ -11,7 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
-import dev.steenbakker.flutter_ble_central.models.State
+import dev.steenbakker.flutter_ble_central.models.FlutterBleCentralState
 import androidx.core.content.edit
 
 /**
@@ -43,7 +43,7 @@ class FlutterBleCentralManager(context: Context) {
   var mBluetoothLeScanner: BluetoothLeScanner? = mBluetoothManager?.adapter?.bluetoothLeScanner
 
   /** Callback invoked after permission request result */
-  var permissionResultCallback: ((State) -> Unit)? = null
+  var permissionResultCallback: ((FlutterBleCentralState) -> Unit)? = null
 
   /** Callback invoked after enable bluetooth request */
   var bluetoothEnabledCallback: ((Boolean) -> Unit)? = null
@@ -184,17 +184,17 @@ class FlutterBleCentralManager(context: Context) {
    *
    * @param activity The activity to request permissions from
    * @param callback Optional callback for async permission result.
-   * If `null`, the method just returns the current [State].
+   * If `null`, the method just returns the current [FlutterBleCentralState].
    *
-   * @return Current [State] if no request is needed, or `null` if a request was initiated.
+   * @return Current [FlutterBleCentralState] if no request is needed, or `null` if a request was initiated.
    */
-  fun requestPermission(activity: Activity, callback: ((State) -> Unit)?): State? {
+  fun requestPermission(activity: Activity, callback: ((FlutterBleCentralState) -> Unit)?): FlutterBleCentralState? {
     val missingPermissions = getMissingPermissions(activity)
 
     // No missing permissions
     if (missingPermissions.isEmpty()) {
       setPermissionGranted(activity, true)
-      return State.Granted
+      return FlutterBleCentralState.Granted
     }
 
     val previouslyRequested = getPermissionRequested(activity)
@@ -209,10 +209,10 @@ class FlutterBleCentralManager(context: Context) {
     // Just checking status
     if (callback == null) {
       return when {
-        isRevoked -> State.Denied
-        shouldShowRationale -> State.Denied
-        !previouslyRequested -> State.Denied
-        else -> State.PermanentlyDenied
+        isRevoked -> FlutterBleCentralState.Denied
+        shouldShowRationale -> FlutterBleCentralState.Denied
+        !previouslyRequested -> FlutterBleCentralState.Denied
+        else -> FlutterBleCentralState.PermanentlyDenied
       }
     }
 
@@ -229,16 +229,16 @@ class FlutterBleCentralManager(context: Context) {
   }
 
   /**
-   * Returns the current Bluetooth adapter state as a [State] enum.
+   * Returns the current Bluetooth adapter state as a [FlutterBleCentralState] enum.
    *
-   * @return [State.Unsupported] if adapter is null,
-   * [State.Denied] if disabled, [State.Ready] if enabled.
+   * @return [FlutterBleCentralState.Unsupported] if adapter is null,
+   * [FlutterBleCentralState.Denied] if disabled, [FlutterBleCentralState.Ready] if enabled.
    */
-  fun getBluetoothState(): State {
+  fun getBluetoothState(): FlutterBleCentralState {
     val adapter = mBluetoothManager?.adapter
-    return if (adapter == null) State.Unsupported
-    else if (!adapter.isEnabled) State.Denied
-    else State.Ready
+    return if (adapter == null) FlutterBleCentralState.Unsupported
+    else if (!adapter.isEnabled) FlutterBleCentralState.Denied
+    else FlutterBleCentralState.Ready
   }
 
   /**
@@ -250,26 +250,26 @@ class FlutterBleCentralManager(context: Context) {
    *
    * @param activity The activity context
    * @param onReady Callback executed if Bluetooth is ready
-   * @param onError Callback executed with the error [State]
+   * @param onError Callback executed with the error [FlutterBleCentralState]
    */
   fun ensureBluetoothReady(
     activity: Activity,
     onReady: () -> Unit,
-    onError: (State) -> Unit
+    onError: (FlutterBleCentralState) -> Unit
   ) {
-    if (getBluetoothState() == State.Unsupported) {
-      onError(State.Unsupported)
+    if (getBluetoothState() == FlutterBleCentralState.Unsupported) {
+      onError(FlutterBleCentralState.Unsupported)
       return
     }
 
     val permissionState = requestPermission(activity) { permState ->
-      if (permState == State.Granted) {
+      if (permState == FlutterBleCentralState.Granted) {
         if (!isBluetoothEnabled()) {
           enableBluetooth(activity) { bluetoothEnabled ->
             if (bluetoothEnabled) {
               onReady()
             } else {
-              onError(State.TurnedOff)
+              onError(FlutterBleCentralState.TurnedOff)
             }
           }
         } else {
@@ -280,13 +280,13 @@ class FlutterBleCentralManager(context: Context) {
       }
     }
 
-    if (permissionState == State.Granted) {
+    if (permissionState == FlutterBleCentralState.Granted) {
       if (!isBluetoothEnabled()) {
         enableBluetooth(activity) { bluetoothEnabled ->
           if (bluetoothEnabled) {
             onReady()
           } else {
-            onError(State.TurnedOff)
+            onError(FlutterBleCentralState.TurnedOff)
           }
         }
       } else {
