@@ -59,7 +59,7 @@ class _MyAppState extends State<MyApp> {
         );
 
         final result = await FlutterBleCentral().requestPermission();
-        _requestPermissions(result);
+        unawaited(_requestPermissions(result));
         return;
       default:
         _messengerKey.currentState?.showSnackBar(
