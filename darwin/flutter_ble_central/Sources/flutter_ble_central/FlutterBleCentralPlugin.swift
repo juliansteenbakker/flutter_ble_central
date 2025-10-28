@@ -87,7 +87,7 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
             startScan(call, result: result)
         case "stop":
             stopScan(result)
-        case "openAppSettings":
+        case "openAppSettings", "openBluetoothSettings":
 #if os(iOS)
             if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(settingsUrl)
