@@ -40,10 +40,13 @@ class FlutterBleCentralManager(context: Context) {
   var mBluetoothManager: BluetoothManager? = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
 
   /** Bluetooth LE scanner instance (obtained from Bluetooth adapter) */
-  var mBluetoothLeScanner: BluetoothLeScanner? = null
+  var mBluetoothLeScanner: BluetoothLeScanner? = mBluetoothManager?.adapter?.bluetoothLeScanner
 
   /** Callback invoked after permission request result */
   var permissionResultCallback: ((State) -> Unit)? = null
+
+  /** Callback invoked after enable bluetooth request */
+  var bluetoothEnabledCallback: ((Boolean) -> Unit)? = null
 
   /**
    * Start scanning for nearby Bluetooth LE devices.
@@ -117,14 +120,15 @@ class FlutterBleCentralManager(context: Context) {
   /**
    * Attempts to enable Bluetooth on the device.
    *
-   * If [ask] is true, shows the system dialog to request user approval.
-   * If [ask] is false and the Android version is below Tiramisu, enables Bluetooth programmatically.
+   * If [callback] is not null, shows the system dialog to request user approval.
+   * If [callback] is null and the Android version is below Tiramisu, enables Bluetooth programmatically.
    *
    * @param activity Activity to use for launching the enable dialog
-   * @param ask Whether to show a dialog or enable directly (pre-Android 13)
+   * @param callback Response on intent to enable bluetooth (pre-Android 13)
    */
-  fun enableBluetooth(activity: Activity, ask: Boolean) {
-    if (ask) {
+  fun enableBluetooth(activity: Activity, callback: ((Boolean) -> Unit)?) {
+    if (callback != null) {
+      bluetoothEnabledCallback = callback
       ActivityCompat.startActivityForResult(
         activity,
         Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
@@ -261,7 +265,13 @@ class FlutterBleCentralManager(context: Context) {
     val permissionState = requestPermission(activity) { permState ->
       if (permState == State.Granted) {
         if (!isBluetoothEnabled()) {
-          enableBluetooth(activity, true)
+          enableBluetooth(activity) { bluetoothEnabled ->
+            if (bluetoothEnabled) {
+              onReady()
+            } else {
+              onError(State.TurnedOff)
+            }
+          }
         } else {
           onReady()
         }
@@ -272,7 +282,13 @@ class FlutterBleCentralManager(context: Context) {
 
     if (permissionState == State.Granted) {
       if (!isBluetoothEnabled()) {
-        enableBluetooth(activity, true)
+        enableBluetooth(activity) { bluetoothEnabled ->
+          if (bluetoothEnabled) {
+            onReady()
+          } else {
+            onError(State.TurnedOff)
+          }
+        }
       } else {
         onReady()
       }

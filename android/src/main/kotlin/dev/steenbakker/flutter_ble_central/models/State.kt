@@ -35,13 +35,6 @@ enum class State(val value: Int) {
     PermanentlyDenied(3),
 
     /**
-     * The status is unknown.
-     *
-     * Typically returned when the permission state cannot be determined.
-     */
-    Unknown(8),
-
-    /**
      * The user cannot change this app's permission status,
      * possibly due to active restrictions such as parental controls being in place.
      *
@@ -66,6 +59,13 @@ enum class State(val value: Int) {
      * The device does not support Bluetooth or the required feature.
      */
     Unsupported(7),
+
+    /**
+     * The status is unknown.
+     *
+     * Typically returned when the permission state cannot be determined.
+     */
+    Unknown(8),
 
     /**
      * Bluetooth is fully available and ready to use.
