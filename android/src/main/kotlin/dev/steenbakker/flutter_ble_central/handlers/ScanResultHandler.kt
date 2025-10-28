@@ -38,6 +38,9 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     /** Whether to send lightweight scan results. */
     private var useLightweightScanResult = false
 
+    /** Whether to enable timing statistics logging. */
+    private var enableTimingStats = true
+
     /** Event channel used to communicate scan results to Flutter. */
     private val eventChannel = EventChannel(
         flutterPluginBinding.binaryMessenger,
@@ -58,6 +61,17 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
      */
     fun setUseLightweightScanResult(useLightweight: Boolean) {
         useLightweightScanResult = useLightweight
+    }
+
+    /**
+     * Enables or disables timing statistics logging.
+     *
+     * When enabled, logs timing information for each scan result publish operation.
+     *
+     * @param enabled Whether to log timing statistics.
+     */
+    fun setEnableTimingStats(enabled: Boolean) {
+        enableTimingStats = enabled
     }
 
     /**
@@ -85,12 +99,12 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
      *
      * The result is converted to a map, then sent on the main thread
      * (required by Flutter's event channel API). Timing statistics
-     * are logged for performance monitoring.
+     * are logged for performance monitoring if enabled.
      *
      * @param scanResult The BLE scan result to be sent.
      */
     fun publish(scanResult: ScanResult) {
-        val startTime = System.currentTimeMillis()
+        val startTime = if (enableTimingStats) System.currentTimeMillis() else 0
         val mapped = if (useLightweightScanResult) {
             scanResultToMapLight(scanResult)
         } else {
@@ -99,8 +113,10 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
 
         Handler(Looper.getMainLooper()).post {
             eventSink?.success(mapped)
-            val duration = System.currentTimeMillis() - startTime
-            PublishTimingStats.logTime(duration)
+            if (enableTimingStats) {
+                val duration = System.currentTimeMillis() - startTime
+                PublishTimingStats.logTime(duration)
+            }
         }
     }
 

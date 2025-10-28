@@ -29,6 +29,14 @@ class FlutterBleCentral {
 
   static const tag = 'flutter_ble_central:';
 
+  /// Enables or disables timing statistics logging for scan result processing.
+  ///
+  /// When enabled, the native handlers will log timing information for each
+  /// scan result publish operation, which is useful for performance monitoring.
+  ///
+  /// Default is `false`.
+  bool enableTimingStats = false;
+
   /// Method Channel used to communicate state with
   final MethodChannel _methodChannel =
       const MethodChannel('dev.steenbakker.flutter_ble_central/method');
@@ -58,22 +66,19 @@ class FlutterBleCentral {
   Future<BluetoothCentralState> start({
     ScanSettings? scanSettings,
   }) async {
+    final settings = (scanSettings ?? ScanSettings()).toJson();
+    settings['enableTimingStats'] = enableTimingStats;
+
     if (Platform.isWindows) {
       try {
-        await _methodChannel.invokeMethod(
-          'start',
-          (scanSettings ?? ScanSettings()).toJson(),
-        );
+        await _methodChannel.invokeMethod('start', settings);
       } on PlatformException catch (e) {
         debugPrint('$tag platform exception: $e');
         return BluetoothCentralState.turnedOff;
       }
       return BluetoothCentralState.ready;
     }
-    final response = await _methodChannel.invokeMethod<int>(
-      'start',
-      (scanSettings ?? ScanSettings()).toJson(),
-    );
+    final response = await _methodChannel.invokeMethod<int>('start', settings);
     return response == null
         ? BluetoothCentralState.unknown
         : BluetoothCentralState.values[response];

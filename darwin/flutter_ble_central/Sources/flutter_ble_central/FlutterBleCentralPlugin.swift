@@ -84,7 +84,7 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "start":
-            startScan(result)
+            startScan(call, result: result)
         case "stop":
             stopScan(result)
         case "openAppSettings":
@@ -105,12 +105,27 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
     
     /**
      Starts BLE scanning using the Flutter BLE Central Manager.
-     
+
      - Parameter result: The Flutter result callback used to send back the operation state.
      */
     private func startScan(_ result: @escaping FlutterResult) {
         flutterBleCentralManager.startScan(with: nil)
         result(CentralState.Ready.rawValue)
+    }
+
+    /**
+     Starts BLE scanning with settings from Flutter.
+
+     - Parameters:
+       - call: The method call containing scan settings.
+       - result: The Flutter result callback used to send back the operation state.
+     */
+    private func startScan(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        if let arguments = call.arguments as? [String: Any],
+           let enableTimingStats = arguments["enableTimingStats"] as? Bool {
+            scanResultHandler.setEnableTimingStats(enableTimingStats)
+        }
+        startScan(result)
     }
     
     /**

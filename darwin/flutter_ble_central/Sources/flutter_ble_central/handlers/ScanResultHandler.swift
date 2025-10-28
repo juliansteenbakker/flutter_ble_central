@@ -31,6 +31,9 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
     /// The event channel used for publishing scan results.
     private let eventChannel: FlutterEventChannel
 
+    /// Whether to enable timing statistics logging.
+    private var enableTimingStats: Bool = true
+
     // MARK: - Init
 
     init(registrar: FlutterPluginRegistrar) {
@@ -45,6 +48,17 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
         )
         super.init()
         eventChannel.setStreamHandler(self)
+    }
+
+    // MARK: - Configuration
+
+    /**
+     Enables or disables timing statistics logging.
+
+     - Parameter enabled: Whether to log timing statistics for scan result publishing.
+     */
+    func setEnableTimingStats(_ enabled: Bool) {
+        enableTimingStats = enabled
     }
 
     // MARK: - Public API
@@ -65,13 +79,15 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
             return
         }
 
-        let startTime = CFAbsoluteTimeGetCurrent()
+        let startTime = enableTimingStats ? CFAbsoluteTimeGetCurrent() : 0
         let message = parseAdvertisementData(advertiseData, rssi: rssi, peripheral: peripheral)
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
             eventSink(message)
-            let durationMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            PublishTimingStats.logTime(durationMs)
+            if self?.enableTimingStats == true {
+                let durationMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                PublishTimingStats.logTime(durationMs)
+            }
         }
     }
 
