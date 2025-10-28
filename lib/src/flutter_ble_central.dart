@@ -175,40 +175,52 @@ class FlutterBleCentral {
     if (Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
       final raw = Map<String, dynamic>.from(data as Map);
 
-      Uint8List manufacturerIdAndData =
-          raw["manufacturerSpecificData"] as Uint8List;
+      // Safely extract manufacturer data
+      // Safe conversion of manufacturerSpecificData to Uint8List
+      Uint8List? manufacturerIdAndData;
+      final dynamic mData = raw["manufacturerSpecificData"];
+      if (mData is Uint8List) {
+        manufacturerIdAndData = mData;
+      } else if (mData is List) {
+        manufacturerIdAndData = Uint8List.fromList(mData.cast<int>());
+      }
 
       if (Platform.isWindows) {
-        final int manufacturerId = raw["manufacturerId"] as int;
-        final b = BytesBuilder();
-        final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
-        b.add(l1);
-        b.add(manufacturerIdAndData);
-        manufacturerIdAndData = b.toBytes();
+        final manufacturerId = raw["manufacturerId"] as int?;
+        if (manufacturerId != null && manufacturerIdAndData != null) {
+          final b = BytesBuilder();
+          final l1 = Uint8List(2)..buffer.asInt16List()[0] = manufacturerId;
+          b.add(l1);
+          b.add(manufacturerIdAndData);
+          manufacturerIdAndData = b.toBytes();
+        }
       }
 
       Map<String, dynamic> manufacturerSpecificData = {};
-      if (manufacturerIdAndData.length >= 3) {
-        manufacturerSpecificData = {
-          "${manufacturerIdAndData[0] | manufacturerIdAndData[1] << 8}":
-              manufacturerIdAndData.sublist(2),
-        };
+      if (manufacturerIdAndData != null && manufacturerIdAndData.length >= 3) {
+        final id = manufacturerIdAndData[0] | (manufacturerIdAndData[1] << 8);
+        final value = manufacturerIdAndData.sublist(2);
+        manufacturerSpecificData = {id.toString(): value};
       }
 
       raw['scanRecord'] = {
         'deviceName': raw['deviceName'],
-        'manufacturerSpecificData': manufacturerSpecificData,
-        'serviceData': raw['serviceData'],
-        'serviceUuids': raw['serviceUuids'],
+        'manufacturerSpecificData': manufacturerSpecificData.isEmpty
+            ? null
+            : manufacturerSpecificData,
+        'serviceData': raw['serviceData'] ?? {},
+        'serviceUuids': raw['serviceUuids'] ?? [],
       };
 
-      raw['device'] = {'address': raw['address']};
+      raw['device'] = {
+        'address': raw['address'] ?? '',
+      };
 
-      result = ScanResult.fromJson(raw);
+      result = ScanResult.fromPlatform(raw);
     } else {
       result = ScanResult.fromPlatform(data as Map<Object?, Object?>);
     }
 
     sink.add(result);
-  }
+    }
 }

@@ -7,25 +7,40 @@
 
 import Foundation
 
+/**
+ Represents Bluetooth authorization and adapter state on iOS.
+
+ This mirrors the Android `State` enum so the Flutter layer can work
+ with a consistent set of values across platforms.
+
+ - Note: Some states (e.g., `Restricted` and `Limited`) are only applicable on iOS.
+ */
 enum CentralState: Int {
-    case Granted = 0 /// The user denied access to the requested feature, permission needs to be asked first.
-    case Denied = 1  /// Permission to the requested feature is permanently denied,
 
-    /// the permission dialog will not be shown when requesting this permission.
-    /// The user may still change the permission status in the settings.
-    case PermanentlyDenied = 2  /// The status is unknown
+    /// The user granted access to the requested feature.
+    case Granted = 0
 
+    /// The user denied access, but the system may still prompt for permission.
+    case Denied = 1
 
-    /// The user cannot change this app's status, possibly due to active restrictions such as parental controls being in place.
-    ///
-    /// Only supported on iOS.
-    case Restricted = 3  /// User has authorized this application for limited access.
+    /// Permission was permanently denied. The user must change it in Settings.
+    case PermanentlyDenied = 2
 
-    /// Only supported on iOS (iOS14+).
-    case Limited = 4  /// Bluetooth is turned off
+    /// The app cannot request permission (e.g., parental controls or device restrictions).
+    case Restricted = 3
+
+    /// The user has authorized limited access (iOS 14+ only).
+    case Limited = 4
+
+    /// Bluetooth is turned off on the device.
     case TurnedOff = 5
-    case Unsupported = 6
-    case Unknown = 7
-    case Ready = 8
 
+    /// Bluetooth is unsupported on this device.
+    case Unsupported = 6
+
+    /// The status is unknown or could not be determined.
+    case Unknown = 7
+
+    /// Bluetooth is fully available and ready to use.
+    case Ready = 8
 }
