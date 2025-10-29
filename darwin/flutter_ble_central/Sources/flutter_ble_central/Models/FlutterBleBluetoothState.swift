@@ -15,7 +15,7 @@ import Foundation
 
  - Note: Some states (e.g., `Restricted` and `Limited`) are only applicable on iOS.
  */
-enum FlutterBleCentralState: Int {
+enum FlutterBleBluetoothState: Int {
 
     /// The user granted access to the requested feature.
     case Granted = 0
