@@ -1,3 +1,11 @@
+## 0.1.1
+
+- Update permission system
+- Merge iOS and macOS codebase
+- Update permission system
+- Add enableTimingStats to FlutterBleCentral and disable it by default
+
+
 ## 0.1.0
 
 - [Android] Added useLightweightScanResult for android to improve fast scanning.
