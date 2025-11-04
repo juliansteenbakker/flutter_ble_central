@@ -1,4 +1,4 @@
-## 0.1.1
+## 0.2.0
 
 - Update permission system
 - Merge iOS and macOS codebase
