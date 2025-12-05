@@ -1,6 +1,6 @@
 name: flutter_ble_central
 description: A Flutter package for scanning BLE data in central mode.
-version: 0.2.0
+version: 0.2.1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

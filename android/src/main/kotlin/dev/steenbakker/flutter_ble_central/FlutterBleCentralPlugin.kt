@@ -63,6 +63,15 @@ class FlutterBleCentralPlugin :
   /** Active BLE scan callback, if scanning is ongoing. */
   private var scanCallback: ScanResultCallback? = null
 
+  /** Handler for scheduling scan refresh timer */
+  private val scanRefreshHandler = Handler(Looper.getMainLooper())
+
+  /** Runnable for refreshing the scan every 4 minutes */
+  private var scanRefreshRunnable: Runnable? = null
+
+  /** Stored scan settings for restarting the scan */
+  private var currentScanSettings: ScanSettings? = null
+
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     methodChannel = MethodChannel(
       flutterPluginBinding.binaryMessenger,
@@ -77,6 +86,8 @@ class FlutterBleCentralPlugin :
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    // Clean up scan refresh timer
+    cancelScanRefresh()
     methodChannel.setMethodCallHandler(null)
   }
 
@@ -172,7 +183,13 @@ class FlutterBleCentralPlugin :
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
 
     try {
-      flutterBleCentralManager?.startScan(scanSettings.build(), scanCallback!!)
+      val builtSettings = scanSettings.build()
+      currentScanSettings = builtSettings
+      flutterBleCentralManager?.startScan(builtSettings, scanCallback!!)
+
+      // Schedule scan refresh after 4 minutes (240,000 milliseconds)
+      scheduleScanRefresh()
+
       safeResult(result) {
         result.success(FlutterBleCentralState.Ready.ordinal)
       }
@@ -184,13 +201,70 @@ class FlutterBleCentralPlugin :
   }
 
   /**
+   * Schedules a scan refresh to occur after 4 minutes to prevent Android
+   * from switching to opportunistic scan mode (which happens after 5 minutes).
+   */
+  private fun scheduleScanRefresh() {
+    // Cancel any existing scheduled refresh
+    cancelScanRefresh()
+
+    scanRefreshRunnable = Runnable {
+      refreshScan()
+    }
+
+    // Schedule refresh after 4 minutes (240,000 milliseconds)
+    scanRefreshHandler.postDelayed(scanRefreshRunnable!!, 240000)
+  }
+
+  /**
+   * Cancels the scheduled scan refresh timer.
+   */
+  private fun cancelScanRefresh() {
+    scanRefreshRunnable?.let {
+      scanRefreshHandler.removeCallbacks(it)
+    }
+    scanRefreshRunnable = null
+  }
+
+  /**
+   * Refreshes the BLE scan by stopping and restarting it with the same settings.
+   * This prevents Android from switching to opportunistic scan mode.
+   */
+  private fun refreshScan() {
+    val callback = scanCallback
+    val settings = currentScanSettings
+
+    if (callback != null && settings != null) {
+      try {
+        // Stop the current scan
+        flutterBleCentralManager?.stopScan(callback)
+
+        // Restart the scan with the same settings
+        flutterBleCentralManager?.startScan(settings, callback)
+
+        // Schedule the next refresh
+        scheduleScanRefresh()
+      } catch (e: Exception) {
+        // Log error but don't crash, the scan may have already been stopped
+        android.util.Log.e("FlutterBleCentral", "Error refreshing scan: ${e.message}")
+      }
+    }
+  }
+
+  /**
    * Stop BLE scan if running.
    */
   private fun handleStop(result: Result) {
+    // Cancel the refresh timer
+    cancelScanRefresh()
+
     if (scanCallback != null) {
       flutterBleCentralManager?.stopScan(scanCallback!!)
       scanCallback = null
     }
+
+    currentScanSettings = null
+
     safeResult(result) {
       result.success(FlutterBleCentralState.Ready.ordinal)
     }
@@ -365,6 +439,7 @@ class FlutterBleCentralPlugin :
   }
 
   override fun onDetachedFromActivity() {
+    cancelScanRefresh()
     flutterBleCentralManager?.permissionResultCallback?.invoke(FlutterBleCentralState.Denied)
     flutterBleCentralManager?.permissionResultCallback = null
     activityBinding = null

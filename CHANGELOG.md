@@ -1,3 +1,7 @@
+## 0.2.1
+
+- [Android] Add a refresh timer that restarts the scan after 4 minutes to prevent Android from changing the state of the scan to "opportunistic".
+
 ## 0.2.0
 
 - Update permission system
