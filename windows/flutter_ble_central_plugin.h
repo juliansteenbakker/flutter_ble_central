@@ -72,9 +72,12 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   Radio bluetoothRadio{ nullptr };
 
+  // UI thread context for dispatching callbacks to Flutter
+  winrt::apartment_context ui_thread_;
+
   BluetoothLEAdvertisementWatcher bluetoothLEWatcher{ nullptr };
   winrt::event_token bluetoothLEWatcherReceivedToken;
-  void BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
+  winrt::fire_and_forget BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
   void BluetoothLEWatcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args);
 
 

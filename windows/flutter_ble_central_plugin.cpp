@@ -154,31 +154,35 @@ void FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped(
     // OutputDebugString((L"Received ".c_str());
 }
 
-void FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
+winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     BluetoothLEAdvertisementWatcher sender,
     BluetoothLEAdvertisementReceivedEventArgs args) {
- // OutputDebugString((L"Received " + winrt::to_hstring (args.Advertisement()) + L"\n").c_str());
+  // Extract all data on the callback thread first
   auto manufacturer_data = parseManufacturerData(args.Advertisement());
-  if (scan_result_sink_) {
-    auto bluetoothAddress = args.BluetoothAddress();
-    auto localName = args.Advertisement().LocalName();
-    auto name = winrt::to_string(localName);
-    if (localName.empty()) {
-      // TODO
-      // auto device = co_await BluetoothLEDevice::FromBluetoothAddressAsync(bluetoothAddress);
-      // name = winrt::to_string(device.Name());
+  auto bluetoothAddress = args.BluetoothAddress();
+  auto localName = args.Advertisement().LocalName();
+  auto name = winrt::to_string(localName);
+  if (localName.empty()) {
+    std::stringstream sstream;
+    sstream << std::hex << bluetoothAddress;
+    name = sstream.str();
+  }
+  auto manufacturerId = args.Advertisement().ManufacturerData().Size() > 0
+      ? args.Advertisement().ManufacturerData().GetAt(0).CompanyId()
+      : 0;
+  auto rssi = args.RawSignalStrengthInDBm();
+  auto address = std::to_string(bluetoothAddress);
 
-      std::stringstream sstream;
-      sstream << std::hex << bluetoothAddress;
-      name = sstream.str();
-    }
+  // Switch to UI thread before sending to Flutter
+  co_await ui_thread_;
+
+  if (scan_result_sink_) {
     scan_result_sink_->Success(flutter::EncodableMap{
       {"deviceName", name},
-      {"address", std::to_string(bluetoothAddress)},
+      {"address", address},
       {"manufacturerSpecificData", manufacturer_data},
-      {"rssi", args.RawSignalStrengthInDBm()},
-        {"manufacturerId", args.Advertisement().ManufacturerData().GetAt(0).CompanyId()},
-      //{"serviceUuids", args.Advertisement().ServiceUuids()},
+      {"rssi", rssi},
+      {"manufacturerId", manufacturerId},
     });
   }
 }
