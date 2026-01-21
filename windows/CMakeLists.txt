@@ -13,7 +13,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(PLUGIN_NAME "flutter_ble_central_plugin")
 
 include(FetchContent)
-set(CPPWINRT_VERSION "2.0.230706.1")
+set(CPPWINRT_VERSION "2.0.250303.1")
 
 ################ NuGet intall begin ################
 FetchContent_Declare(nuget
