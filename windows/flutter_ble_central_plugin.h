@@ -69,8 +69,10 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
         const flutter::EncodableValue* arguments) override;
 
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> scan_result_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> state_changed_sink_;
 
   Radio bluetoothRadio{ nullptr };
+  winrt::event_token radioStateChangedToken;
 
   // UI thread context for dispatching callbacks to Flutter
   winrt::apartment_context ui_thread_;
@@ -80,7 +82,19 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
   winrt::fire_and_forget BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
   void BluetoothLEWatcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args);
 
+  // State changed event channel handlers
+  std::unique_ptr<flutter::StreamHandlerError<>> OnStateListenInternal(
+      const flutter::EncodableValue* arguments,
+      std::unique_ptr<flutter::EventSink<>>&& events);
+  std::unique_ptr<flutter::StreamHandlerError<>> OnStateCancelInternal(
+      const flutter::EncodableValue* arguments);
 
+  void OnRadioStateChanged(Radio sender, IInspectable args);
+  void PublishState(int state);
+  int GetCurrentState();
+
+  winrt::fire_and_forget EnableBluetoothAsync(
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 };
 
 }  // namespace flutter_ble_central

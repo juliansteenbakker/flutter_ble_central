@@ -2,6 +2,7 @@
 
 // This must be included before many other Windows headers.
 #include <windows.h>
+#include <shellapi.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Storage.Streams.h>
@@ -43,6 +44,11 @@ auto event_scan_result =
         registrar->messenger(), "dev.steenbakker.flutter_ble_central/scan_result",
         &flutter::StandardMethodCodec::GetInstance());
 
+  auto event_state_changed =
+      std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "dev.steenbakker.flutter_ble_central/ble_state_changed",
+          &flutter::StandardMethodCodec::GetInstance());
+
   auto plugin = std::make_unique<FlutterBleCentralPlugin>();
 
   channel->SetMethodCallHandler(
@@ -64,6 +70,20 @@ auto event_scan_result =
       });
   event_scan_result->SetStreamHandler(std::move(handler));
 
+  auto state_handler = std::make_unique<
+      flutter::StreamHandlerFunctions<>>(
+      [plugin_pointer = plugin.get()](
+          const flutter::EncodableValue* arguments,
+          std::unique_ptr<flutter::EventSink<>>&& events)
+          -> std::unique_ptr<flutter::StreamHandlerError<>> {
+        return plugin_pointer->OnStateListenInternal(arguments, std::move(events));
+      },
+      [plugin_pointer = plugin.get()](const flutter::EncodableValue* arguments)
+          -> std::unique_ptr<flutter::StreamHandlerError<>> {
+        return plugin_pointer->OnStateCancelInternal(arguments);
+      });
+  event_state_changed->SetStreamHandler(std::move(state_handler));
+
   registrar->AddPlugin(std::move(plugin));
 }
 
@@ -75,7 +95,12 @@ FlutterBleCentralPlugin::~FlutterBleCentralPlugin() {}
 
 winrt::fire_and_forget FlutterBleCentralPlugin::InitializeAsync() {
   auto bluetoothAdapter = co_await BluetoothAdapter::GetDefaultAsync();
-  bluetoothRadio = co_await bluetoothAdapter.GetRadioAsync();
+  if (bluetoothAdapter) {
+    bluetoothRadio = co_await bluetoothAdapter.GetRadioAsync();
+    if (bluetoothRadio) {
+      radioStateChangedToken = bluetoothRadio.StateChanged({ this, &FlutterBleCentralPlugin::OnRadioStateChanged });
+    }
+  }
 }
 
 void FlutterBleCentralPlugin::HandleMethodCall(
@@ -93,6 +118,33 @@ void FlutterBleCentralPlugin::HandleMethodCall(
     }
     result->Success(flutter::EncodableValue(version_stream.str()));
 
+    } else if (method_call.method_name().compare("isSupported") == 0) {
+      // Check if Bluetooth adapter exists
+      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr));
+    } else if (method_call.method_name().compare("isBluetoothOn") == 0) {
+      if (bluetoothRadio) {
+        result->Success(flutter::EncodableValue(bluetoothRadio.State() == RadioState::On));
+      } else {
+        result->Success(flutter::EncodableValue(false));
+      }
+    } else if (method_call.method_name().compare("hasPermission") == 0) {
+      // Windows doesn't have a permission system like mobile platforms
+      // Return "granted" (0) if Bluetooth is available
+      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+    } else if (method_call.method_name().compare("requestPermission") == 0) {
+      // Windows doesn't require permission requests
+      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+    } else if (method_call.method_name().compare("enableBluetooth") == 0) {
+      EnableBluetoothAsync(std::move(result));
+      return;
+    } else if (method_call.method_name().compare("openBluetoothSettings") == 0) {
+      // Open Windows Bluetooth settings
+      ShellExecuteA(nullptr, "open", "ms-settings:bluetooth", nullptr, nullptr, SW_SHOWNORMAL);
+      result->Success(nullptr);
+    } else if (method_call.method_name().compare("openAppSettings") == 0) {
+      // Open Windows app settings
+      ShellExecuteA(nullptr, "open", "ms-settings:appsfeatures", nullptr, nullptr, SW_SHOWNORMAL);
+      result->Success(nullptr);
     } else if (method_call.method_name().compare("start") == 0) {
       if (!bluetoothLEWatcher) {
         bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
@@ -201,6 +253,68 @@ std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBle
 {
     scan_result_sink_ = nullptr;
   return nullptr;
+}
+
+// State changed event channel handlers
+std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBleCentralPlugin::OnStateListenInternal(
+    const flutter::EncodableValue* arguments,
+    std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
+{
+  state_changed_sink_ = std::move(events);
+  // Send current state to new listener
+  PublishState(GetCurrentState());
+  return nullptr;
+}
+
+std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBleCentralPlugin::OnStateCancelInternal(
+    const flutter::EncodableValue* arguments)
+{
+  state_changed_sink_ = nullptr;
+  return nullptr;
+}
+
+void FlutterBleCentralPlugin::OnRadioStateChanged(Radio sender, IInspectable args) {
+  PublishState(GetCurrentState());
+}
+
+// CentralState enum values matching Dart:
+// 0 = unknown, 1 = unsupported, 2 = unauthorized, 3 = poweredOff, 4 = idle
+int FlutterBleCentralPlugin::GetCurrentState() {
+  if (!bluetoothRadio) {
+    return 1; // unsupported
+  }
+  switch (bluetoothRadio.State()) {
+    case RadioState::On:
+      return 4; // idle (ready)
+    case RadioState::Off:
+      return 3; // poweredOff
+    case RadioState::Disabled:
+      return 2; // unauthorized (disabled by policy)
+    default:
+      return 0; // unknown
+  }
+}
+
+void FlutterBleCentralPlugin::PublishState(int state) {
+  if (state_changed_sink_) {
+    state_changed_sink_->Success(flutter::EncodableValue(state));
+  }
+}
+
+winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  if (!bluetoothRadio) {
+    result->Success(flutter::EncodableValue(false));
+    co_return;
+  }
+
+  try {
+    auto accessStatus = co_await bluetoothRadio.SetStateAsync(RadioState::On);
+    bool success = (accessStatus == RadioAccessStatus::Allowed);
+    result->Success(flutter::EncodableValue(success));
+  } catch (...) {
+    result->Success(flutter::EncodableValue(false));
+  }
 }
 
 }  // namespace flutter_ble_central
