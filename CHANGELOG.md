@@ -1,5 +1,4 @@
-## NEXT
-
+## 0.3.0
 - Added `isBluetoothOn` getter to check if Bluetooth is powered on
 - Added `isSupported` getter to check if BLE is supported on the device
 - Added `enableBluetooth()` method (Android/Windows, returns false on Apple platforms)
