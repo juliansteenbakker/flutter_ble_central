@@ -118,6 +118,22 @@ class FlutterBleCentralManager(context: Context) {
   }
 
   /**
+   * Simple check if required permissions are granted (without rationale check).
+   * Can be used with just Context, doesn't require Activity.
+   */
+  fun hasRequiredPermissions(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      hasBluetoothScanPermission(context) && hasBluetoothConnectPermission(context)
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      hasLocationCoarsePermission(context) && hasLocationFinePermission(context)
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      hasLocationCoarsePermission(context)
+    } else {
+      true // Permissions not required on older versions
+    }
+  }
+
+  /**
    * Attempts to enable Bluetooth on the device.
    *
    * If [callback] is not null, shows the system dialog to request user approval.

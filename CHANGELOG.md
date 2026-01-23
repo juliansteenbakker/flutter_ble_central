@@ -1,3 +1,18 @@
+## NEXT
+
+- Added `isBluetoothOn` getter to check if Bluetooth is powered on
+- Added `isSupported` getter to check if BLE is supported on the device
+- Added `enableBluetooth()` method (Android only, returns false on Apple platforms)
+- Added `openBluetoothSettings()` method to open system Bluetooth settings
+- [Android] Added Bluetooth state change listener using BroadcastReceiver
+- [Android] Added StateChangedHandler for streaming state changes to Flutter
+- [Android] Added activity lifecycle callbacks to refresh state when app resumes
+- [Darwin] Fixed StateChangedHandler event channel name (was incorrectly using "peripheral" instead of "central")
+- [Darwin] Added `hasPermission()` support using CBCentralManager.authorization API (iOS 13.1+/macOS 10.15+)
+- [Example] Complete redesign with Material 3 UI
+- [Example] Added permission request dialogs with platform-specific UI
+- [Example] Added Bluetooth off dialog with enable functionality
+
 ## 0.2.1
 
 - [Android] Add a refresh timer that restarts the scan after 4 minutes to prevent Android from changing the state of the scan to "opportunistic".

@@ -1,13 +1,18 @@
 package dev.steenbakker.flutter_ble_central
 
 import android.app.Activity
+import android.app.Application
+import android.bluetooth.BluetoothAdapter
 import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -16,6 +21,8 @@ import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.RE
 import dev.steenbakker.flutter_ble_central.FlutterBleCentralManager.Companion.REQUEST_PERMISSION_BT
 import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
+import dev.steenbakker.flutter_ble_central.handlers.StateChangedHandler
+import dev.steenbakker.flutter_ble_central.models.CentralState
 import dev.steenbakker.flutter_ble_central.models.FlutterBleCentralState
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -51,8 +58,38 @@ class FlutterBleCentralPlugin :
   /** Handler for reporting scan errors to Flutter. */
   private lateinit var scanErrorHandler: ScanErrorHandler
 
+  /** Handler for broadcasting state changes to Flutter. */
+  private lateinit var stateChangedHandler: StateChangedHandler
+
   /** BLE manager responsible for low-level Bluetooth operations. */
   private var flutterBleCentralManager: FlutterBleCentralManager? = null
+
+  /** BroadcastReceiver to listen for Bluetooth state changes. */
+  private val bluetoothStateReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+        val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+        onBluetoothStateChanged(state)
+      }
+    }
+  }
+
+  /** Lifecycle callbacks to detect when app resumes from background. */
+  private val lifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+    override fun onActivityResumed(activity: Activity) {
+      // When activity resumes (e.g., coming back from settings), update state
+      publishCurrentState()
+    }
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+    override fun onActivityStarted(activity: Activity) {}
+    override fun onActivityPaused(activity: Activity) {}
+    override fun onActivityStopped(activity: Activity) {}
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+    override fun onActivityDestroyed(activity: Activity) {}
+  }
+
+  /** Flag to track if receiver is registered. */
+  private var isReceiverRegistered = false
 
   /** Plugin context (application context). */
   private var context: Context? = null
@@ -82,12 +119,18 @@ class FlutterBleCentralPlugin :
     context = flutterPluginBinding.applicationContext
     scanResultHandler = ScanResultHandler(flutterPluginBinding)
     scanErrorHandler = ScanErrorHandler(flutterPluginBinding)
+    stateChangedHandler = StateChangedHandler(flutterPluginBinding)
     flutterBleCentralManager = FlutterBleCentralManager(flutterPluginBinding.applicationContext)
+
+    // Register Bluetooth state receiver
+    registerBluetoothReceiver()
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     // Clean up scan refresh timer
     cancelScanRefresh()
+    // Unregister Bluetooth state receiver
+    unregisterBluetoothReceiver()
     methodChannel.setMethodCallHandler(null)
   }
 
@@ -106,6 +149,7 @@ class FlutterBleCentralPlugin :
       "start" -> handleStart(call, result)
       "stop" -> handleStop(result)
       "isSupported" -> handleIsSupported(result)
+      "isBluetoothOn" -> handleIsBluetoothOn(result)
       "enableBluetooth" -> handleEnableBluetooth(call, result)
       "requestPermission" -> handleRequestPermission(result)
       "hasPermission" -> handleHasPermission(result)
@@ -369,6 +413,80 @@ class FlutterBleCentralPlugin :
   }
 
   /**
+   * Check if Bluetooth is currently on.
+   */
+  private fun handleIsBluetoothOn(result: Result) {
+    val isOn = flutterBleCentralManager?.isBluetoothEnabled() ?: false
+    safeResult(result) {
+      result.success(isOn)
+    }
+  }
+
+  /**
+   * Register the Bluetooth state receiver.
+   */
+  private fun registerBluetoothReceiver() {
+    if (!isReceiverRegistered && context != null) {
+      val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context!!.registerReceiver(bluetoothStateReceiver, filter, Context.RECEIVER_EXPORTED)
+      } else {
+        context!!.registerReceiver(bluetoothStateReceiver, filter)
+      }
+      isReceiverRegistered = true
+    }
+  }
+
+  /**
+   * Unregister the Bluetooth state receiver.
+   */
+  private fun unregisterBluetoothReceiver() {
+    if (isReceiverRegistered && context != null) {
+      try {
+        context!!.unregisterReceiver(bluetoothStateReceiver)
+      } catch (e: Exception) {
+        // Receiver may not be registered
+      }
+      isReceiverRegistered = false
+    }
+  }
+
+  /**
+   * Called when Bluetooth state changes.
+   */
+  private fun onBluetoothStateChanged(state: Int) {
+    val centralState = when (state) {
+      BluetoothAdapter.STATE_OFF -> CentralState.poweredOff
+      BluetoothAdapter.STATE_TURNING_OFF -> CentralState.poweredOff
+      BluetoothAdapter.STATE_ON -> {
+        val hasPermissions = context?.let {
+          flutterBleCentralManager?.hasRequiredPermissions(it)
+        } ?: false
+        if (hasPermissions) CentralState.idle else CentralState.unauthorized
+      }
+      BluetoothAdapter.STATE_TURNING_ON -> return // Ignore transitional state
+      else -> return
+    }
+    stateChangedHandler.publishState(centralState)
+  }
+
+  /**
+   * Publish the current state based on Bluetooth and permission status.
+   */
+  private fun publishCurrentState() {
+    val isBluetoothEnabled = flutterBleCentralManager?.isBluetoothEnabled() ?: false
+    val centralState = if (!isBluetoothEnabled) {
+      CentralState.poweredOff
+    } else {
+      val hasPermissions = context?.let {
+        flutterBleCentralManager?.hasRequiredPermissions(it)
+      } ?: false
+      if (hasPermissions) CentralState.idle else CentralState.unauthorized
+    }
+    stateChangedHandler.publishState(centralState)
+  }
+
+  /**
    * Handle unsupported or unknown method calls.
    */
   private fun handleNotImplemented(result: Result) {
@@ -428,6 +546,10 @@ class FlutterBleCentralPlugin :
     binding.addRequestPermissionsResultListener(this)
     binding.addActivityResultListener(this)
     activityBinding = binding
+    // Register lifecycle callbacks to detect when app resumes
+    binding.activity.application.registerActivityLifecycleCallbacks(lifecycleCallbacks)
+    // Publish initial state
+    publishCurrentState()
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -442,6 +564,8 @@ class FlutterBleCentralPlugin :
     cancelScanRefresh()
     flutterBleCentralManager?.permissionResultCallback?.invoke(FlutterBleCentralState.Denied)
     flutterBleCentralManager?.permissionResultCallback = null
+    // Unregister lifecycle callbacks
+    activityBinding?.activity?.application?.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
     activityBinding = null
   }
 

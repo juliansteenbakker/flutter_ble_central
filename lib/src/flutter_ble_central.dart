@@ -107,6 +107,10 @@ class FlutterBleCentral {
   Future<bool> get isSupported async =>
       await _methodChannel.invokeMethod<bool>('isSupported') ?? false;
 
+  /// Returns `true` if Bluetooth is powered on
+  Future<bool> get isBluetoothOn async =>
+      await _methodChannel.invokeMethod<bool>('isBluetoothOn') ?? false;
+
   /// Enable Bluetooth
   Future<bool> enableBluetooth({bool askUser = true}) async {
     return await _methodChannel.invokeMethod<bool>(

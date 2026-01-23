@@ -5,6 +5,7 @@ import UIKit
 import FlutterMacOS
 import AppKit
 #endif
+import CoreBluetooth
 
 /**
  The `FlutterBleCentralPlugin` class is the main entry point for the
@@ -73,11 +74,15 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
 
     /**
      Handles incoming method calls from Flutter.
-     
+
      Supported methods:
      - `"start"` → Start scanning for BLE peripherals
      - `"stop"` → Stop scanning
-     - `"openAppSettings"` → Open system settings
+     - `"isSupported"` → Check if BLE is supported
+     - `"isBluetoothOn"` → Check if Bluetooth is powered on
+     - `"enableBluetooth"` → Not supported on Apple platforms
+     - `"openAppSettings"` → Open app settings
+     - `"openBluetoothSettings"` → Open Bluetooth settings
      - `"hasPermission"` → Return current Bluetooth permission state
      - `"requestPermission"` → Trigger permission request if needed
      */
@@ -87,20 +92,76 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
             startScan(call, result: result)
         case "stop":
             stopScan(result)
-        case "openAppSettings", "openBluetoothSettings":
-#if os(iOS)
-            if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                UIApplication.shared.open(settingsUrl)
-            }
-#else
-            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
-#endif
+        case "isSupported":
+            result(flutterBleCentralManager.bluetoothState != .Unsupported)
+        case "isBluetoothOn":
+            result(flutterBleCentralManager.bluetoothState == .Ready)
+        case "enableBluetooth":
+            // Cannot programmatically enable Bluetooth on iOS/macOS
+            result(false)
+        case "openBluetoothSettings":
+            openBluetoothSettings()
             result(nil)
-        case "hasPermission", "requestPermission":
-            result(flutterBleCentralManager.permissionState.rawValue)
+        case "openAppSettings":
+            openAppSettings()
+            result(nil)
+        case "hasPermission":
+            result(getPermissionState())
+        case "requestPermission":
+            // On iOS/macOS, permissions are requested implicitly when using Bluetooth
+            // The CBCentralManager initialization triggers the permission request
+            result(getPermissionState())
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+
+    // Returns permission state ordinal matching FlutterBleBluetoothState enum
+    // Note: This checks PERMISSION status only, not Bluetooth power state (use isBluetoothOn for that)
+    private func getPermissionState() -> Int {
+        // First try the authorization API (iOS 13.1+/macOS 10.15+)
+        // This gives us permission status regardless of Bluetooth power state
+        if #available(iOS 13.1, macOS 10.15, *) {
+            switch CBCentralManager.authorization {
+            case .allowedAlways:
+                return FlutterBleBluetoothState.Granted.rawValue
+            case .denied:
+                return FlutterBleBluetoothState.PermanentlyDenied.rawValue
+            case .restricted:
+                return FlutterBleBluetoothState.Restricted.rawValue
+            case .notDetermined:
+                return FlutterBleBluetoothState.Denied.rawValue
+            @unknown default:
+                break // fall through to state-based check
+            }
+        }
+
+        // Fallback: return the permission state from the manager
+        return flutterBleCentralManager.permissionState.rawValue
+    }
+
+    private func openBluetoothSettings() {
+#if os(iOS)
+        // Cannot open bluetooth settings directly, open app settings instead
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+#else
+        // Open System Settings to Bluetooth pane on macOS
+        if let url = URL(string: "x-apple.systempreferences:com.apple.BluetoothSettings") {
+            NSWorkspace.shared.open(url)
+        }
+#endif
+    }
+
+    private func openAppSettings() {
+#if os(iOS)
+        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(settingsUrl)
+        }
+#else
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+#endif
     }
     
     /**
