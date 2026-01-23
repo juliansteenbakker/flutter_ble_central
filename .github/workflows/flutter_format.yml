@@ -30,9 +30,8 @@ jobs:
       - name: Set up Flutter ${{ matrix.flutter.name }}
         uses: subosito/flutter-action@v2.21.0
         with:
-          channel: ${{ matrix.flutter.use_version_file && 'any' || '' }}
-#          flutter-version-file: ${{ matrix.flutter.use_version_file && 'pubspec.yaml' || '' }} TODO: enable when upper version is supported
-          flutter-version: ${{ matrix.flutter.use_version_file && '3.22.0' || '' }}
+          channel: ${{ matrix.flutter.use_version_file && 'any' || 'stable' }}
+          flutter-version-file: ${{ matrix.flutter.use_version_file && 'pubspec.yaml' || '' }}
 
       - name: Flutter version
         run: flutter --version
