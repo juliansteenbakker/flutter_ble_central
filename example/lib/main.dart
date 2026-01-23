@@ -12,7 +12,9 @@ import 'package:flutter_ble_central/flutter_ble_central.dart';
 
 void main() => runApp(const FlutterBleCentralExample());
 
+/// Example app for the flutter_ble_central plugin
 class FlutterBleCentralExample extends StatefulWidget {
+  /// Constructor for the example app of the flutter_ble_central plugin
   const FlutterBleCentralExample({super.key});
 
   @override
@@ -40,14 +42,14 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     super.initState();
     _ble.enableTimingStats = true;
     _listenToStreams();
-    _initPlatformState();
+    unawaited(_initPlatformState());
   }
 
   @override
   void dispose() {
-    _scanResultSub?.cancel();
-    _scanErrorSub?.cancel();
-    _stateChangedSub?.cancel();
+    unawaited(_scanResultSub?.cancel());
+    unawaited(_scanErrorSub?.cancel());
+    unawaited(_stateChangedSub?.cancel());
     super.dispose();
   }
 
@@ -92,7 +94,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     // First check if BLE is supported
     final isSupported = await _ble.isSupported;
     if (!isSupported && mounted) {
-      _showUnsupportedDialog();
+      await _showUnsupportedDialog();
       return;
     }
 
@@ -111,11 +113,11 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     }
   }
 
-  void _showUnsupportedDialog() {
+  Future<void> _showUnsupportedDialog() async {
     final navigatorContext = _navigatorKey.currentContext;
     if (navigatorContext == null) return;
 
-    showDialog<void>(
+    await showDialog<void>(
       context: navigatorContext,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
@@ -124,7 +126,8 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
               const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 48),
           title: const Text('Bluetooth Not Supported'),
           content: const Text(
-            'This device does not support Bluetooth Low Energy (BLE) scanning.\n\n'
+            'This device does not support Bluetooth Low Energy (BLE) scanning.'
+            '\n\n'
             'BLE central mode requires compatible hardware.',
           ),
           actions: <Widget>[
@@ -139,7 +142,8 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
   }
 
   Future<bool?> _showPermissionDialog(
-      BluetoothCentralState initialState) async {
+    BluetoothCentralState initialState,
+  ) async {
     final navigatorContext = _navigatorKey.currentContext;
     if (navigatorContext == null) return false;
 
@@ -265,7 +269,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                   devicesFound: _devices.length,
                 ),
               ),
-          
+
               // Scan Controls
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -296,7 +300,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                 ),
               ),
               const SizedBox(height: 8),
-          
+
               // Bluetooth & Permission Controls
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -309,7 +313,8 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                       runSpacing: 8,
                       children: [
                         ActionChip(
-                          avatar: const Icon(Icons.check_circle_outline, size: 18),
+                          avatar:
+                              const Icon(Icons.check_circle_outline, size: 18),
                           label: const Text('Check Permission'),
                           onPressed: () async {
                             final status = await _ble.hasPermission();
@@ -321,25 +326,28 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                         ),
                         if (!Platform.isIOS && !Platform.isMacOS)
                           ActionChip(
-                            avatar: const Icon(Icons.add_circle_outline, size: 18),
+                            avatar:
+                                const Icon(Icons.add_circle_outline, size: 18),
                             label: const Text('Request Permission'),
                             onPressed: () async {
                               final status = await _ble.requestPermission();
                               _showSnackBar(
                                 'Permission: ${status.name}',
-                                isError: status != BluetoothCentralState.granted,
+                                isError:
+                                    status != BluetoothCentralState.granted,
                               );
                             },
                           ),
                         ActionChip(
-                          avatar: const Icon(Icons.settings_bluetooth, size: 18),
+                          avatar:
+                              const Icon(Icons.settings_bluetooth, size: 18),
                           label: const Text('Bluetooth Settings'),
-                          onPressed: () => _ble.openBluetoothSettings(),
+                          onPressed: _ble.openBluetoothSettings,
                         ),
                         ActionChip(
                           avatar: const Icon(Icons.app_settings_alt, size: 18),
                           label: const Text('App Settings'),
-                          onPressed: () => _ble.openAppSettings(),
+                          onPressed: _ble.openAppSettings,
                         ),
                       ],
                     ),
@@ -347,77 +355,78 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                 ),
               ),
               const SizedBox(height: 8),
-          
-              // Device List
-              if (_devices.isEmpty) Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.bluetooth_searching,
-                            size: 64,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _isScanning
-                                ? 'Scanning for devices...'
-                                : 'No devices found',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ) else ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _devices.length,
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final scanResult = _devices.values.elementAt(index);
-                        final name =
-                            scanResult.scanRecord?.deviceName ?? 'Unknown';
-                        final address = scanResult.device?.address ?? 'N/A';
-                        final rssi = scanResult.rssi ?? 0;
 
-                        return Card(
-                          child: ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.bluetooth,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onPrimaryContainer,
-                              ),
+              // Device List
+              if (_devices.isEmpty)
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.bluetooth_searching,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isScanning
+                            ? 'Scanning for devices...'
+                            : 'No devices found',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.outline,
                             ),
-                            title: Text(name),
-                            subtitle: Text(address),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.signal_cellular_alt,
-                                  color: _getRssiColor(rssi),
-                                ),
-                                Text(
-                                  '$rssi dBm',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _devices.length,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemBuilder: (context, index) {
+                    final scanResult = _devices.values.elementAt(index);
+                    final name = scanResult.scanRecord?.deviceName ?? 'Unknown';
+                    final address = scanResult.device?.address ?? 'N/A';
+                    final rssi = scanResult.rssi ?? 0;
+
+                    return Card(
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            shape: BoxShape.circle,
                           ),
-                        );
-                      },
-                    ),
+                          child: Icon(
+                            Icons.bluetooth,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                          ),
+                        ),
+                        title: Text(name),
+                        subtitle: Text(address),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.signal_cellular_alt,
+                              color: _getRssiColor(rssi),
+                            ),
+                            Text(
+                              '$rssi dBm',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         ),
@@ -433,12 +442,6 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
 }
 
 class _StatusCard extends StatelessWidget {
-  final bool isSupported;
-  final CentralState centralState;
-  final bool isScanning;
-  final int packetsFound;
-  final int devicesFound;
-
   const _StatusCard({
     required this.isSupported,
     required this.centralState,
@@ -446,6 +449,11 @@ class _StatusCard extends StatelessWidget {
     required this.packetsFound,
     required this.devicesFound,
   });
+  final bool isSupported;
+  final CentralState centralState;
+  final bool isScanning;
+  final int packetsFound;
+  final int devicesFound;
 
   @override
   Widget build(BuildContext context) {
@@ -523,7 +531,9 @@ class _StatusCard extends StatelessWidget {
   }
 
   (IconData, Color, String) _getStateInfo(
-      CentralState state, ColorScheme colorScheme) {
+    CentralState state,
+    ColorScheme colorScheme,
+  ) {
     return switch (state) {
       CentralState.idle => (Icons.bluetooth, colorScheme.primary, 'Ready'),
       CentralState.advertising => (
@@ -543,21 +553,24 @@ class _StatusCard extends StatelessWidget {
           'Unsupported'
         ),
       CentralState.unauthorized => (Icons.lock, Colors.orange, 'Unauthorized'),
-      CentralState.unknown => (Icons.help_outline, colorScheme.outline, 'Unknown'),
+      CentralState.unknown => (
+          Icons.help_outline,
+          colorScheme.outline,
+          'Unknown'
+        ),
     };
   }
 }
 
 class _StatItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
   const _StatItem({
     required this.icon,
     required this.label,
     required this.value,
   });
+  final IconData icon;
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -581,15 +594,14 @@ class _StatItem extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-
   const _SectionCard({
     required this.title,
     required this.icon,
     required this.children,
   });
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -621,13 +633,12 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _PermissionDialog extends StatefulWidget {
-  final VoidCallback onGranted;
-  final BluetoothCentralState initialState;
-
   const _PermissionDialog({
     required this.onGranted,
     required this.initialState,
   });
+  final VoidCallback onGranted;
+  final BluetoothCentralState initialState;
 
   @override
   State<_PermissionDialog> createState() => _PermissionDialogState();
@@ -656,7 +667,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkPermissionAndClose();
+      unawaited(_checkPermissionAndClose());
     }
   }
 
@@ -713,11 +724,14 @@ class _PermissionDialogState extends State<_PermissionDialog>
         size: 48,
       ),
       title: Text(
-          _isPermanentlyDenied ? 'Permission Denied' : 'Permission Required'),
+        _isPermanentlyDenied ? 'Permission Denied' : 'Permission Required',
+      ),
       content: Text(
         _isPermanentlyDenied
-            ? 'Bluetooth permission was denied. You can only grant permission through the app settings.\n\n'
-                'Please open Settings and enable Bluetooth permissions for this app.'
+            ? 'Bluetooth permission was denied. You can only grant permission '
+                'through the app settings.\n\n'
+                'Please open Settings and enable Bluetooth permissions for '
+                'this app.'
             : 'BLE scanning requires Bluetooth permissions.\n\n'
                 'Please grant the required permissions to continue.',
       ),
@@ -728,13 +742,13 @@ class _PermissionDialogState extends State<_PermissionDialog>
         ),
         if (_isPermanentlyDenied)
           FilledButton.icon(
-            onPressed: () => _ble.openAppSettings(),
+            onPressed: _ble.openAppSettings,
             icon: const Icon(Icons.settings),
             label: const Text('Open Settings'),
           )
         else ...[
           OutlinedButton.icon(
-            onPressed: () => _ble.openBluetoothSettings(),
+            onPressed: _ble.openBluetoothSettings,
             icon: const Icon(Icons.settings),
             label: const Text('Settings'),
           ),
@@ -768,7 +782,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
-          onPressed: () => _ble.openBluetoothSettings(),
+          onPressed: _ble.openBluetoothSettings,
           icon: const Icon(Icons.settings),
           label: const Text('Open Settings'),
         ),
@@ -790,7 +804,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
-          onPressed: () => _ble.openAppSettings(),
+          onPressed: _ble.openAppSettings,
           icon: const Icon(Icons.settings),
           label: const Text('Open Settings'),
         ),
@@ -800,9 +814,8 @@ class _PermissionDialogState extends State<_PermissionDialog>
 }
 
 class _BluetoothOffDialog extends StatefulWidget {
-  final VoidCallback onEnabled;
-
   const _BluetoothOffDialog({required this.onEnabled});
+  final VoidCallback onEnabled;
 
   @override
   State<_BluetoothOffDialog> createState() => _BluetoothOffDialogState();
@@ -829,7 +842,7 @@ class _BluetoothOffDialogState extends State<_BluetoothOffDialog>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkBluetoothAndClose();
+      unawaited(_checkBluetoothAndClose());
     }
   }
 
@@ -882,13 +895,13 @@ class _BluetoothOffDialogState extends State<_BluetoothOffDialog>
         ),
         if (_isApplePlatform)
           FilledButton.icon(
-            onPressed: () => _ble.openBluetoothSettings(),
+            onPressed: _ble.openBluetoothSettings,
             icon: const Icon(Icons.settings),
             label: const Text('Open Settings'),
           )
         else ...[
           OutlinedButton.icon(
-            onPressed: () => _ble.openBluetoothSettings(),
+            onPressed: _ble.openBluetoothSettings,
             icon: const Icon(Icons.settings),
             label: const Text('Settings'),
           ),
