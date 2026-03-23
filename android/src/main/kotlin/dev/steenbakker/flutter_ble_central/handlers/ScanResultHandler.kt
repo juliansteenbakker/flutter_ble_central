@@ -245,6 +245,7 @@ class ScanResultHandler(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
         return mapOf(
             "device" to deviceMap,
             "scanRecord" to scanRecordMap,
+            "rssi" to scanResult.rssi,
         )
     }
 }

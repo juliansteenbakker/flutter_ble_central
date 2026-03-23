@@ -1,3 +1,6 @@
+## 0.3.1
+- Added RSSI to `useLightweightScanResult`
+
 ## 0.3.0
 - Added `isBluetoothOn` getter to check if Bluetooth is powered on
 - Added `isSupported` getter to check if BLE is supported on the device
