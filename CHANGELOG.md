@@ -1,3 +1,8 @@
+## 0.3.2
+- [Windows] Fixed crash when Bluetooth adapter is not present or Bluetooth is disabled
+- [Windows] Added comprehensive exception handling throughout the plugin to prevent crashes from WinRT API failures
+- [Windows] Fixed potential crashes in scan result processing and state change handlers
+
 ## 0.3.1
 - Added RSSI to `useLightweightScanResult`
 
