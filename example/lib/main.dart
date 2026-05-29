@@ -120,7 +120,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     await showDialog<void>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return AlertDialog(
           icon:
               const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 48),
@@ -150,7 +150,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     return showDialog<bool>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return _PermissionDialog(
           initialState: initialState,
           onGranted: () {
@@ -173,7 +173,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     return showDialog<bool>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return _BluetoothOffDialog(
           onEnabled: () {
             _messengerKey.currentState?.showSnackBar(
