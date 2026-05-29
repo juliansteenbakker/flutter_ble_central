@@ -40,8 +40,9 @@ class FlutterBleCentral {
   bool enableTimingStats = false;
 
   /// Method Channel used to communicate state with
-  final MethodChannel _methodChannel =
-      const MethodChannel('dev.steenbakker.flutter_ble_central/method');
+  final MethodChannel _methodChannel = const MethodChannel(
+    'dev.steenbakker.flutter_ble_central/method',
+  );
 
   /// Event Channel for Scan Result
   final EventChannel _scanResultEventChannel = const EventChannel(
@@ -65,9 +66,7 @@ class FlutterBleCentral {
   Stream<CentralState>? _centralState;
 
   /// Start scanning. Takes [ScanSettings] as an input.
-  Future<BluetoothCentralState> start({
-    ScanSettings? scanSettings,
-  }) async {
+  Future<BluetoothCentralState> start({ScanSettings? scanSettings}) async {
     final settings = (scanSettings ?? ScanSettings()).toJson();
     settings['enableTimingStats'] = enableTimingStats;
 
@@ -123,8 +122,9 @@ class FlutterBleCentral {
 
   /// Request Bluetooth permissions
   Future<BluetoothCentralState> requestPermission() async {
-    final response =
-        await _methodChannel.invokeMethod<int>('requestPermission');
+    final response = await _methodChannel.invokeMethod<int>(
+      'requestPermission',
+    );
     return response == null
         ? BluetoothCentralState.unknown
         : BluetoothCentralState.values[response];
@@ -150,11 +150,12 @@ class FlutterBleCentral {
 
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
-    _scanResultTransformer ??=
-        StreamTransformer.fromHandlers(handleData: handleData);
-    _scanResult ??= _scanResultEventChannel
-        .receiveBroadcastStream()
-        .transform(_scanResultTransformer!);
+    _scanResultTransformer ??= StreamTransformer.fromHandlers(
+      handleData: handleData,
+    );
+    _scanResult ??= _scanResultEventChannel.receiveBroadcastStream().transform(
+          _scanResultTransformer!,
+        );
 
     return _scanResult!;
   }
@@ -162,11 +163,12 @@ class FlutterBleCentral {
   /// Returns Stream of MTU updates.
   Stream<int>? get onScanError {
     if (!Platform.isAndroid) return null;
-    _scanResultTransformer ??=
-        StreamTransformer.fromHandlers(handleData: handleData);
-    return _scanError ??= _scanErrorEventChannel
-        .receiveBroadcastStream()
-        .map((dynamic event) => event as int);
+    _scanResultTransformer ??= StreamTransformer.fromHandlers(
+      handleData: handleData,
+    );
+    return _scanError ??= _scanErrorEventChannel.receiveBroadcastStream().map(
+          (dynamic event) => event as int,
+        );
   }
 
   /// Returns Stream of state.
@@ -174,9 +176,9 @@ class FlutterBleCentral {
   /// After listening to this Stream,
   /// you'll be notified about changes in peripheral state.
   Stream<CentralState> get onPeripheralStateChanged {
-    _centralState ??= _stateChangedEventChannel
-        .receiveBroadcastStream()
-        .map((dynamic event) => CentralState.values[event as int]);
+    _centralState ??= _stateChangedEventChannel.receiveBroadcastStream().map(
+          (dynamic event) => CentralState.values[event as int],
+        );
     return _centralState!;
   }
 
@@ -229,9 +231,7 @@ class FlutterBleCentral {
         'serviceUuids': raw['serviceUuids'] ?? <String>[],
       };
 
-      raw['device'] = {
-        'address': raw['address'] ?? '',
-      };
+      raw['device'] = {'address': raw['address'] ?? ''};
 
       result = ScanResult.fromPlatform(raw);
     } else {
