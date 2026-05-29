@@ -339,6 +339,19 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                             },
                           ),
                         ActionChip(
+                          avatar: const Icon(Icons.bluetooth, size: 18),
+                          label: const Text('Enable Bluetooth'),
+                          onPressed: () async {
+                            final enabled = await _ble.enableBluetooth();
+                            _showSnackBar(
+                              enabled
+                                  ? 'Bluetooth enabled!'
+                                  : 'Failed to enable Bluetooth',
+                              isError: !enabled,
+                            );
+                          },
+                        ),
+                        ActionChip(
                           avatar:
                               const Icon(Icons.settings_bluetooth, size: 18),
                           label: const Text('Bluetooth Settings'),
