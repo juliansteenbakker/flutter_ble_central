@@ -9,8 +9,10 @@ part of 'scan_settings.dart';
 ScanSettings _$ScanSettingsFromJson(Map<String, dynamic> json) => ScanSettings(
       scanMode: $enumDecodeNullable(_$ScanModeEnumMap, json['scanMode']),
       reportDelay: (json['reportDelay'] as num?)?.toInt(),
-      callbackType:
-          $enumDecodeNullable(_$CallbackTypeEnumMap, json['callbackType']),
+      callbackType: $enumDecodeNullable(
+        _$CallbackTypeEnumMap,
+        json['callbackType'],
+      ),
       matchMode: $enumDecodeNullable(_$MatchModeEnumMap, json['matchMode']),
       numOfMatches:
           $enumDecodeNullable(_$MatchNumEnumMap, json['numOfMatches']),
@@ -45,10 +47,7 @@ const _$CallbackTypeEnumMap = {
   CallbackType.allMatchesAutoBatch: 8,
 };
 
-const _$MatchModeEnumMap = {
-  MatchMode.aggressive: 1,
-  MatchMode.sticky: 2,
-};
+const _$MatchModeEnumMap = {MatchMode.aggressive: 1, MatchMode.sticky: 2};
 
 const _$MatchNumEnumMap = {
   MatchNum.oneAdvertisement: 1,

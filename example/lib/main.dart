@@ -120,7 +120,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     await showDialog<void>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return AlertDialog(
           icon:
               const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 48),
@@ -150,7 +150,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     return showDialog<bool>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return _PermissionDialog(
           initialState: initialState,
           onGranted: () {
@@ -173,7 +173,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     return showDialog<bool>(
       context: navigatorContext,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
         return _BluetoothOffDialog(
           onEnabled: () {
             _messengerKey.currentState?.showSnackBar(
@@ -301,55 +301,75 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
               ),
               const SizedBox(height: 8),
 
-              // Bluetooth & Permission Controls
+              // Bluetooth Controls
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _SectionCard(
-                  title: 'Settings',
-                  icon: Icons.settings,
+                  title: 'Bluetooth',
+                  icon: Icons.bluetooth,
                   children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ActionChip(
-                          avatar:
-                              const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text('Check Permission'),
-                          onPressed: () async {
-                            final status = await _ble.hasPermission();
-                            _showSnackBar(
-                              'Permission: ${status.name}',
-                              isError: status != BluetoothCentralState.granted,
-                            );
-                          },
-                        ),
-                        if (!Platform.isIOS && !Platform.isMacOS)
-                          ActionChip(
-                            avatar:
-                                const Icon(Icons.add_circle_outline, size: 18),
-                            label: const Text('Request Permission'),
-                            onPressed: () async {
-                              final status = await _ble.requestPermission();
-                              _showSnackBar(
-                                'Permission: ${status.name}',
-                                isError:
-                                    status != BluetoothCentralState.granted,
-                              );
-                            },
-                          ),
-                        ActionChip(
-                          avatar:
-                              const Icon(Icons.settings_bluetooth, size: 18),
-                          label: const Text('Bluetooth Settings'),
-                          onPressed: _ble.openBluetoothSettings,
-                        ),
-                        ActionChip(
-                          avatar: const Icon(Icons.app_settings_alt, size: 18),
-                          label: const Text('App Settings'),
-                          onPressed: _ble.openAppSettings,
-                        ),
-                      ],
+                    _ActionTile(
+                      icon: Icons.bluetooth_connected,
+                      title: 'Enable Bluetooth',
+                      subtitle: 'Turn on Bluetooth radio',
+                      onTap: () async {
+                        final enabled = await _ble.enableBluetooth();
+                        _showSnackBar(
+                          enabled
+                              ? 'Bluetooth enabled!'
+                              : 'Failed to enable Bluetooth',
+                          isError: !enabled,
+                        );
+                      },
+                    ),
+                    _ActionTile(
+                      icon: Icons.settings_bluetooth,
+                      title: 'Bluetooth Settings',
+                      subtitle: 'Open system Bluetooth settings',
+                      onTap: _ble.openBluetoothSettings,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Permission Controls
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _SectionCard(
+                  title: 'Permissions',
+                  icon: Icons.security,
+                  children: [
+                    _ActionTile(
+                      icon: Icons.check_circle_outline,
+                      title: 'Check Permission',
+                      subtitle: 'Verify current permission status',
+                      onTap: () async {
+                        final status = await _ble.hasPermission();
+                        _showSnackBar(
+                          'Permission: ${status.name}',
+                          isError: status != BluetoothCentralState.granted,
+                        );
+                      },
+                    ),
+                    if (!Platform.isIOS && !Platform.isMacOS)
+                      _ActionTile(
+                        icon: Icons.add_circle_outline,
+                        title: 'Request Permission',
+                        subtitle: 'Request required permissions',
+                        onTap: () async {
+                          final status = await _ble.requestPermission();
+                          _showSnackBar(
+                            'Permission: ${status.name}',
+                            isError: status != BluetoothCentralState.granted,
+                          );
+                        },
+                      ),
+                    _ActionTile(
+                      icon: Icons.app_settings_alt,
+                      title: 'App Settings',
+                      subtitle: 'Open app settings',
+                      onTap: _ble.openAppSettings,
                     ),
                   ],
                 ),
@@ -632,6 +652,69 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+}
+
+class _StepItem extends StatelessWidget {
+  const _StepItem({required this.number, required this.text});
+  final String number;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                number,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
 class _PermissionDialog extends StatefulWidget {
   const _PermissionDialog({
     required this.onGranted,
@@ -794,9 +877,31 @@ class _PermissionDialogState extends State<_PermissionDialog>
     return AlertDialog(
       icon: const Icon(Icons.location_on, color: Colors.blue, size: 48),
       title: const Text('Permission Required'),
-      content: const Text(
-        'BLE scanning on Windows requires location permission.\n\n'
-        'Please grant the required permissions in Settings.',
+      content: const Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('BLE scanning on Windows requires location permission.\n'),
+          Text(
+            'Please follow these steps:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 12),
+          _StepItem(number: '1', text: 'Click "Open Settings" below'),
+          _StepItem(number: '2', text: 'Scroll down and find:'),
+          Padding(
+            padding: EdgeInsets.only(left: 32, top: 4, bottom: 4),
+            child: Text(
+              '"Let desktop apps access your location"',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+          ),
+          _StepItem(number: '3', text: 'Turn this switch ON'),
+          _StepItem(number: '4', text: 'Return to this app'),
+        ],
       ),
       actions: <Widget>[
         TextButton(

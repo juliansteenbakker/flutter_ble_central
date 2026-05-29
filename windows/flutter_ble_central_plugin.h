@@ -89,7 +89,7 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
   std::unique_ptr<flutter::StreamHandlerError<>> OnStateCancelInternal(
       const flutter::EncodableValue* arguments);
 
-  void OnRadioStateChanged(Radio sender, IInspectable args);
+  winrt::fire_and_forget OnRadioStateChanged(Radio sender, IInspectable args);
   void PublishState(int state);
   int GetCurrentState();
 
