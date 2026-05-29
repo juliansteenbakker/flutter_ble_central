@@ -151,11 +151,11 @@ void FlutterBleCentralPlugin::HandleMethodCall(
     } else if (method_call.method_name().compare("openBluetoothSettings") == 0) {
       // Open Windows Bluetooth settings
       ShellExecuteA(nullptr, "open", "ms-settings:bluetooth", nullptr, nullptr, SW_SHOWNORMAL);
-      result->Success(nullptr);
+      result->Success(flutter::EncodableValue());
     } else if (method_call.method_name().compare("openAppSettings") == 0) {
       // Open Windows app settings
       ShellExecuteA(nullptr, "open", "ms-settings:appsfeatures", nullptr, nullptr, SW_SHOWNORMAL);
-      result->Success(nullptr);
+      result->Success(flutter::EncodableValue());
     } else if (method_call.method_name().compare("start") == 0) {
       try {
         if (!bluetoothLEWatcher) {
@@ -168,7 +168,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         if (status != BluetoothLEAdvertisementWatcherStatus::Started) {
           bluetoothLEWatcher.Start();
         }
-        result->Success(nullptr);
+        result->Success(flutter::EncodableValue());
       } catch (winrt::hresult_error const& e) {
         bluetoothLEWatcher = nullptr;
         result->Error("start_failed", winrt::to_string(e.message()));
@@ -183,7 +183,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
           bluetoothLEWatcher.Received(bluetoothLEWatcherReceivedToken);
         }
         bluetoothLEWatcher = nullptr;
-        result->Success(nullptr);
+        result->Success(flutter::EncodableValue());
       }
       catch (...) {
         bluetoothLEWatcher = nullptr;
