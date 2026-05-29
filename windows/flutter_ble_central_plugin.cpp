@@ -160,15 +160,20 @@ void FlutterBleCentralPlugin::HandleMethodCall(
       try {
         if (!bluetoothLEWatcher) {
           bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
-          //bluetoothLEWatcher.SignalStrengthFilter().InRangeThresholdInDBm(-70);
-          //bluetoothLEWatcher.SignalStrengthFilter().OutOfRangeThresholdInDBm(-75);
-          // bluetoothLEWatcher.SignalStrengthFilter().OutOfRangeTimeout(std::chrono::milliseconds{ 2000 });
+          bluetoothLEWatcher.ScanningMode(BluetoothLEScanningMode::Active);
           bluetoothLEWatcherReceivedToken = bluetoothLEWatcher.Received({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Received });
           bluetoothLEWatcher.Stopped({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped });
         }
-        bluetoothLEWatcher.Start();
+        auto status = bluetoothLEWatcher.Status();
+        if (status != BluetoothLEAdvertisementWatcherStatus::Started) {
+          bluetoothLEWatcher.Start();
+        }
         result->Success(nullptr);
+      } catch (winrt::hresult_error const& e) {
+        bluetoothLEWatcher = nullptr;
+        result->Error("start_failed", winrt::to_string(e.message()));
       } catch (...) {
+        bluetoothLEWatcher = nullptr;
         result->Error("start_failed", "Failed to start scanning");
       }
     } else if (method_call.method_name().compare("stop") == 0) {
@@ -307,9 +312,11 @@ std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBle
   return nullptr;
 }
 
-void FlutterBleCentralPlugin::OnRadioStateChanged(Radio sender, IInspectable args) {
+winrt::fire_and_forget FlutterBleCentralPlugin::OnRadioStateChanged(Radio sender, IInspectable args) {
   try {
-    PublishState(GetCurrentState());
+    auto state = GetCurrentState();
+    co_await ui_thread_;
+    PublishState(state);
   }
   catch (...) {
     // Ignore state change errors
@@ -352,13 +359,15 @@ winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
     co_return;
   }
 
+  bool success = false;
   try {
     auto accessStatus = co_await bluetoothRadio.SetStateAsync(RadioState::On);
-    bool success = (accessStatus == RadioAccessStatus::Allowed);
-    result->Success(flutter::EncodableValue(success));
+    success = (accessStatus == RadioAccessStatus::Allowed);
   } catch (...) {
-    result->Success(flutter::EncodableValue(false));
+    success = false;
   }
+  co_await ui_thread_;
+  result->Success(flutter::EncodableValue(success));
 }
 
 }  // namespace flutter_ble_central
