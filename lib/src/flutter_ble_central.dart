@@ -75,6 +75,7 @@ class FlutterBleCentral {
       try {
         await _methodChannel.invokeMethod('start', settings);
       } on PlatformException catch (e) {
+        if (e.code == 'unsupported') return BluetoothCentralState.unsupported;
         debugPrint('$tag platform exception: $e');
         return BluetoothCentralState.turnedOff;
       }

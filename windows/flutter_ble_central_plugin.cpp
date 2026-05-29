@@ -98,13 +98,22 @@ winrt::fire_and_forget FlutterBleCentralPlugin::InitializeAsync() {
     auto bluetoothAdapter = co_await BluetoothAdapter::GetDefaultAsync();
     if (bluetoothAdapter) {
       bluetoothRadio = co_await bluetoothAdapter.GetRadioAsync();
-      if (bluetoothRadio) {
-        radioStateChangedToken = bluetoothRadio.StateChanged({ this, &FlutterBleCentralPlugin::OnRadioStateChanged });
+    } else {
+      // Adapter unreachable via default path (e.g. disabled in Device Manager).
+      // Enumerate radios directly so we can distinguish disabled from unsupported.
+      auto radios = co_await Radio::GetRadiosAsync();
+      for (auto const& radio : radios) {
+        if (radio.Kind() == RadioKind::Bluetooth) {
+          bluetoothRadio = radio;
+          break;
+        }
       }
+    }
+    if (bluetoothRadio) {
+      radioStateChangedToken = bluetoothRadio.StateChanged({ this, &FlutterBleCentralPlugin::OnRadioStateChanged });
     }
   }
   catch (...) {
-    // Bluetooth adapter not available or initialization failed
     bluetoothRadio = nullptr;
   }
 }
@@ -125,8 +134,12 @@ void FlutterBleCentralPlugin::HandleMethodCall(
     result->Success(flutter::EncodableValue(version_stream.str()));
 
     } else if (method_call.method_name().compare("isSupported") == 0) {
-      // Check if Bluetooth adapter exists
-      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr));
+      bool supported = false;
+      try {
+        supported = bluetoothRadio != nullptr &&
+            bluetoothRadio.State() != RadioState::Disabled;
+      } catch (...) {}
+      result->Success(flutter::EncodableValue(supported));
     } else if (method_call.method_name().compare("isBluetoothOn") == 0) {
       bool isOn = false;
       try {
@@ -150,13 +163,17 @@ void FlutterBleCentralPlugin::HandleMethodCall(
       return;
     } else if (method_call.method_name().compare("openBluetoothSettings") == 0) {
       // Open Windows Bluetooth settings
-      ShellExecuteA(nullptr, "open", "ms-settings:bluetooth", nullptr, nullptr, SW_SHOWNORMAL);
+      ShellExecuteW(nullptr, L"open", L"ms-settings:bluetooth", nullptr, nullptr, SW_SHOWNORMAL);
       result->Success(flutter::EncodableValue());
     } else if (method_call.method_name().compare("openAppSettings") == 0) {
       // Open Windows app settings
-      ShellExecuteA(nullptr, "open", "ms-settings:appsfeatures", nullptr, nullptr, SW_SHOWNORMAL);
+      ShellExecuteW(nullptr, L"open", L"ms-settings:appsfeatures", nullptr, nullptr, SW_SHOWNORMAL);
       result->Success(flutter::EncodableValue());
     } else if (method_call.method_name().compare("start") == 0) {
+      if (!bluetoothRadio || bluetoothRadio.State() == RadioState::Disabled) {
+        result->Error("unsupported", "Bluetooth adapter not available");
+        return;
+      }
       try {
         if (!bluetoothLEWatcher) {
           bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
@@ -361,8 +378,11 @@ winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
 
   bool success = false;
   try {
-    auto accessStatus = co_await bluetoothRadio.SetStateAsync(RadioState::On);
-    success = (accessStatus == RadioAccessStatus::Allowed);
+    auto accessStatus = co_await Radio::RequestAccessAsync();
+    if (accessStatus == RadioAccessStatus::Allowed) {
+      auto setResult = co_await bluetoothRadio.SetStateAsync(RadioState::On);
+      success = (setResult == RadioAccessStatus::Allowed);
+    }
   } catch (...) {
     success = false;
   }
