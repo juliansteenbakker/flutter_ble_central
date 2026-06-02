@@ -1,3 +1,7 @@
+## 0.3.3
+- [Darwin] Fixed `CBCentralManager.authorization` macOS 10.15 availability guard
+- [macOS] Removed CocoaPods integration from example app, migrated to Swift Package Manager
+
 ## 0.3.2
 - [Windows] Fixed crash when Bluetooth adapter is not present or Bluetooth is disabled
 - [Windows] Added comprehensive exception handling throughout the plugin to prevent crashes from WinRT API failures
