@@ -105,7 +105,7 @@ final class FlutterBleCentralManager {
      - Returns: A `CentralState` representing the current authorization status.
      */
     var permissionState: FlutterBleBluetoothState {
-        if #available(iOS 13.1, *) {
+        if #available(iOS 13.1, macOS 10.15, *) {
             switch CBCentralManager.authorization {
             case .allowedAlways:
                 return .Granted
