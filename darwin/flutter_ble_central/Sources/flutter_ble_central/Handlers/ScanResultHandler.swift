@@ -25,14 +25,51 @@ import CoreBluetooth
  */
 public class ScanResultHandler: NSObject, FlutterStreamHandler {
 
-    /// The current Flutter event sink for sending data to Dart.
-    private var eventSink: FlutterEventSink?
+    /// The current Flutter event sink for sending data to Dart, guarded by `sinkLock`.
+    ///
+    /// CoreBluetooth delivers on a background queue while `onListen`/`onCancel` run on
+    /// the platform thread. The lock is held only to read or write the reference, never
+    /// while calling the sink, so a re-entrant Flutter call cannot deadlock on it.
+    private var _eventSink: FlutterEventSink?
+
+    private let sinkLock = NSLock()
+
+    private var eventSink: FlutterEventSink? {
+        get {
+            sinkLock.lock()
+            defer { sinkLock.unlock() }
+            return _eventSink
+        }
+        set {
+            sinkLock.lock()
+            _eventSink = newValue
+            sinkLock.unlock()
+        }
+    }
 
     /// The event channel used for publishing scan results.
     private let eventChannel: FlutterEventChannel
 
     /// Whether to enable timing statistics logging.
-    private var enableTimingStats: Bool = true
+    ///
+    /// Written from the platform thread and read from the CoreBluetooth callback
+    /// queue, so it is guarded rather than a plain `Bool`.
+    private var _enableTimingStats: Bool = true
+
+    private let timingStatsLock = NSLock()
+
+    private var enableTimingStats: Bool {
+        get {
+            timingStatsLock.lock()
+            defer { timingStatsLock.unlock() }
+            return _enableTimingStats
+        }
+        set {
+            timingStatsLock.lock()
+            _enableTimingStats = newValue
+            timingStatsLock.unlock()
+        }
+    }
 
     // MARK: - Init
 
@@ -72,7 +109,9 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
        - peripheral: The discovered peripheral.
      */
     func publishScanResult(advertiseData: AdvertisementData, rssi: Int, peripheral: CBPeripheral) {
-        guard let eventSink = eventSink else {
+        // Cheap check before parsing; re-checked on main, as the stream can be
+        // cancelled in between
+        guard eventSink != nil else {
 #if DEBUG
             print("[ScanResultHandler] Warning: Event sink is nil, dropping scan result.")
 #endif
@@ -80,11 +119,15 @@ public class ScanResultHandler: NSObject, FlutterStreamHandler {
         }
 
         let startTime = enableTimingStats ? CFAbsoluteTimeGetCurrent() : 0
+
+        // Parsed on CoreBluetooth's callback queue: this is the expensive part, and
+        // only the sink call below has to be on the platform thread
         let message = parseAdvertisementData(advertiseData, rssi: rssi, peripheral: peripheral)
 
         DispatchQueue.main.async { [weak self] in
-            eventSink(message)
-            if self?.enableTimingStats == true {
+            guard let self = self, let sink = self.eventSink else { return }
+            sink(message)
+            if self.enableTimingStats {
                 let durationMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
                 PublishTimingStats.logTime(durationMs)
             }
