@@ -102,6 +102,20 @@ public class StateChangedHandler: NSObject, FlutterStreamHandler {
      - Parameter state: The state to publish.
      */
     func publishState(_ state: CentralState) {
+        // centralManagerDidUpdateState arrives on the central manager's callback
+        // queue, while the sink and currentState are otherwise only touched from the
+        // platform thread. Other callers are usually already on main, so check rather
+        // than dispatch unconditionally, which also keeps state changes ordered
+        if Thread.isMainThread {
+            deliverState(state)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.deliverState(state)
+            }
+        }
+    }
+
+    private func deliverState(_ state: CentralState) {
         currentState = state
         eventSink?(state.rawValue)
     }

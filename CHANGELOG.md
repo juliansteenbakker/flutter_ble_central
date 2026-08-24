@@ -3,6 +3,7 @@
 ## 0.3.3
 - [Darwin] Fixed `CBCentralManager.authorization` macOS 10.15 availability guard
 - [macOS] Removed CocoaPods integration from example app, migrated to Swift Package Manager
+- [Darwin] Scan results are now parsed on CoreBluetooth's own callback queue instead of the main thread, so scan throughput no longer depends on how busy the Flutter UI is
 
 ## 0.3.2
 - [Windows] Fixed crash when Bluetooth adapter is not present or Bluetooth is disabled

@@ -43,6 +43,17 @@ final class FlutterBleCentralManager {
     /// Map of discovered peripherals by their `UUID`.
     private(set) var activePeripherals = [PeripheralID: CBPeripheral]()
 
+    /// Queue CoreBluetooth delivers its callbacks on.
+    ///
+    /// Deliberately not the main queue: with duplicates allowed, every advertising
+    /// event is reported and parsed, which would otherwise compete with the Flutter
+    /// UI. Serial, to keep CoreBluetooth's callback ordering; only the
+    /// `FlutterEventSink` call hops back to main, as required for Flutter channels.
+    private let callbackQueue = DispatchQueue(
+        label: "dev.steenbakker.flutter_ble_central.callback",
+        qos: .userInitiated
+    )
+
     /**
      Initializes the BLE Central Manager.
 
@@ -69,7 +80,7 @@ final class FlutterBleCentralManager {
 
         self.centralManager = CBCentralManager(
             delegate: self.centralManagerDelegate,
-            queue: nil
+            queue: callbackQueue
         )
     }
 
