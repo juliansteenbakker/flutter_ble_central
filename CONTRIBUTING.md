@@ -33,10 +33,15 @@ dart run build_runner build --delete-conflicting-outputs
 
 ## Testing changes
 
-There are no meaningful unit tests: almost everything this plugin does requires a
-real Bluetooth radio and a real peripheral. Please verify your change by running the
-example app against actual hardware and say so in the PR — including which
-platform(s) you tested on. A change that only compiles has not been tested.
+`test/` covers the pure-Dart layer: the JSON models, the converters, and the
+method-channel calls against a mock handler. Run it with `flutter test`. Several
+tests are guarded with `skip:` because the plugin branches on `dart:io Platform`,
+so CI runs the suite on Linux, macOS and Windows to reach every branch.
+
+That is as far as tests can go — everything else needs a real Bluetooth radio.
+Please also verify your change by running the example app against actual hardware
+and say so in the PR, including which platform(s) you tested on. A change that only
+compiles has not been tested.
 
 CI builds the example app for Android, iOS, macOS, and Windows, since
 `flutter analyze` never compiles the Kotlin, Swift, or C++ sources. It also
