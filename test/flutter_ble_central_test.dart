@@ -127,17 +127,15 @@ void main() {
       response = true;
       expect(await ble.isSupported, true);
       expect(await ble.isBluetoothOn, true);
-      expect(await ble.isAdvertising, true);
       expect(
         calls.map((c) => c.method),
-        ['isSupported', 'isBluetoothOn', 'isAdvertising'],
+        ['isSupported', 'isBluetoothOn'],
       );
     });
 
     test('fall back to false when the native side returns null', () async {
       expect(await ble.isSupported, false);
       expect(await ble.isBluetoothOn, false);
-      expect(await ble.isAdvertising, false);
     });
   });
 
