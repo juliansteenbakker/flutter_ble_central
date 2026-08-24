@@ -1,3 +1,5 @@
+# Changelog
+
 ## 0.3.3
 - [Darwin] Fixed `CBCentralManager.authorization` macOS 10.15 availability guard
 - [macOS] Removed CocoaPods integration from example app, migrated to Swift Package Manager
