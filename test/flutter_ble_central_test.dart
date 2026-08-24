@@ -1,23 +1,345 @@
-// import 'package:flutter/services.dart';
-// import 'package:flutter_test/flutter_test.dart';
-// import 'package:flutter_ble_central/flutter_ble_central.dart';
-//
-// void main() {
-//   const MethodChannel channel = MethodChannel('flutter_ble_central');
-//
-//   TestWidgetsFlutterBinding.ensureInitialized();
-//
-//   setUp(() {
-//     channel.setMockMethodCallHandler((MethodCall methodCall) async {
-//       return '42';
-//     });
-//   });
-//
-//   tearDown(() {
-//     channel.setMockMethodCallHandler(null);
-//   });
-//
-//   test('getPlatformVersion', () async {
-//     expect(await FlutterBleCentral.platformVersion, '42');
-//   });
-// }
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_ble_central/flutter_ble_central.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Collects the results [FlutterBleCentral.handleData] emits.
+class _ListSink implements EventSink<ScanResult> {
+  final results = <ScanResult>[];
+
+  @override
+  void add(ScanResult event) => results.add(event);
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  void close() {}
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const channel = MethodChannel(
+    'dev.steenbakker.flutter_ble_central/method',
+  );
+
+  final ble = FlutterBleCentral();
+  final calls = <MethodCall>[];
+  Object? response;
+
+  void mockChannel() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return response;
+    });
+  }
+
+  setUp(() {
+    calls.clear();
+    response = null;
+    ble.enableTimingStats = false;
+    mockChannel();
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
+  group('FlutterBleCentral', () {
+    test('is a singleton', () {
+      expect(FlutterBleCentral(), same(ble));
+    });
+  });
+
+  // The Windows branches of start/stop are not covered here: they are selected
+  // by dart:io Platform, which the test host decides.
+  group('start', () {
+    test(
+      'sends the scan settings and the timing stats flag',
+      () async {
+        response = 8;
+        ble.enableTimingStats = true;
+
+        final state = await ble.start(
+          scanSettings: ScanSettings(scanMode: ScanMode.scanModeLowLatency),
+        );
+
+        expect(calls.single.method, 'start');
+        final arguments = calls.single.arguments as Map<Object?, Object?>;
+        expect(arguments['scanMode'], 2);
+        expect(arguments['enableTimingStats'], true);
+        expect(state, BluetoothCentralState.ready);
+      },
+      skip: Platform.isWindows,
+    );
+
+    test(
+      'defaults the settings when none are given',
+      () async {
+        response = 0;
+
+        final state = await ble.start();
+
+        final arguments = calls.single.arguments as Map<Object?, Object?>;
+        expect(arguments['scanMode'], isNull);
+        expect(arguments['enableTimingStats'], false);
+        expect(state, BluetoothCentralState.granted);
+      },
+      skip: Platform.isWindows,
+    );
+
+    test(
+      'maps a null response to unknown',
+      () async {
+        expect(await ble.start(), BluetoothCentralState.unknown);
+      },
+      skip: Platform.isWindows,
+    );
+  });
+
+  group('stop', () {
+    test(
+      'maps the response to a state',
+      () async {
+        response = 5;
+        expect(await ble.stop(), BluetoothCentralState.turnedOff);
+        expect(calls.single.method, 'stop');
+      },
+      skip: Platform.isWindows,
+    );
+
+    test(
+      'maps a null response to unknown',
+      () async {
+        expect(await ble.stop(), BluetoothCentralState.unknown);
+      },
+      skip: Platform.isWindows,
+    );
+  });
+
+  group('boolean getters', () {
+    test('return the native value', () async {
+      response = true;
+      expect(await ble.isSupported, true);
+      expect(await ble.isBluetoothOn, true);
+      expect(
+        calls.map((c) => c.method),
+        ['isSupported', 'isBluetoothOn'],
+      );
+    });
+
+    test('fall back to false when the native side returns null', () async {
+      expect(await ble.isSupported, false);
+      expect(await ble.isBluetoothOn, false);
+    });
+  });
+
+  group('enableBluetooth', () {
+    test('forwards askUser', () async {
+      response = true;
+
+      expect(await ble.enableBluetooth(), true);
+      expect(calls.single.method, 'enableBluetooth');
+      expect(calls.single.arguments, true);
+
+      await ble.enableBluetooth(askUser: false);
+      expect(calls.last.arguments, false);
+    });
+
+    test('falls back to false', () async {
+      expect(await ble.enableBluetooth(), false);
+    });
+  });
+
+  group('permissions', () {
+    test('map the response to a state', () async {
+      response = 2;
+      expect(
+        await ble.requestPermission(),
+        BluetoothCentralState.permanentlyDenied,
+      );
+
+      response = 1;
+      expect(await ble.hasPermission(), BluetoothCentralState.denied);
+
+      expect(
+        calls.map((c) => c.method),
+        ['requestPermission', 'hasPermission'],
+      );
+    });
+
+    test('map a null response to unknown', () async {
+      expect(await ble.requestPermission(), BluetoothCentralState.unknown);
+      expect(await ble.hasPermission(), BluetoothCentralState.unknown);
+    });
+  });
+
+  group('settings shortcuts', () {
+    test('invoke their channel method', () async {
+      await ble.openBluetoothSettings();
+      await ble.openAppSettings();
+
+      expect(
+        calls.map((c) => c.method),
+        ['openBluetoothSettings', 'openAppSettings'],
+      );
+    });
+  });
+
+  // The Windows plugin reports the manufacturer id separately and returns
+  // plain booleans from start/stop, so it takes its own branches.
+  group('on Windows', () {
+    test(
+      'start reports ready and maps an unsupported adapter',
+      () async {
+        expect(await ble.start(), BluetoothCentralState.ready);
+        expect(calls.single.method, 'start');
+
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+          throw PlatformException(code: 'unsupported');
+        });
+
+        expect(await ble.start(), BluetoothCentralState.unsupported);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'start reports turnedOff on any other platform error',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+          throw PlatformException(code: 'error');
+        });
+
+        expect(await ble.start(), BluetoothCentralState.turnedOff);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'stop reports ready',
+      () async {
+        expect(await ble.stop(), BluetoothCentralState.ready);
+        expect(calls.single.method, 'stop');
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'handleData prepends the manufacturer id to the payload',
+      () {
+        final sink = _ListSink();
+
+        ble.handleData(
+          <Object?, Object?>{
+            'address': 'AA:BB:CC:DD:EE:FF',
+            'deviceName': 'Sensor',
+            'manufacturerId': 76,
+            'manufacturerSpecificData': <Object?>[1, 2, 3],
+          },
+          sink,
+        );
+
+        expect(sink.results.single.scanRecord?.manufacturerSpecificData, {
+          76: Uint8List.fromList([1, 2, 3]),
+        });
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('handleData', () {
+    final isApple = Platform.isIOS || Platform.isMacOS;
+
+    test(
+      'parses an Android scan result',
+      () {
+        final sink = _ListSink();
+
+        ble.handleData(
+          <Object?, Object?>{
+            'device': <Object?, Object?>{'address': 'AA:BB:CC:DD:EE:FF'},
+            'rssi': -70,
+            'scanRecord': <Object?, Object?>{
+              'deviceName': 'Sensor',
+              'serviceUuids': <Object?>['abcd'],
+            },
+          },
+          sink,
+        );
+
+        final result = sink.results.single;
+        expect(result.device?.address, 'AA:BB:CC:DD:EE:FF');
+        expect(result.rssi, -70);
+        expect(result.scanRecord?.deviceName, 'Sensor');
+      },
+      skip: isApple || Platform.isWindows,
+    );
+
+    test(
+      'splits the manufacturer id off the payload',
+      () {
+        final sink = _ListSink();
+
+        ble.handleData(
+          <Object?, Object?>{
+            'address': 'AA:BB:CC:DD:EE:FF',
+            'deviceName': 'Sensor',
+            'rssi': -70,
+            // Little endian id 0x004C (Apple), followed by the payload.
+            'manufacturerSpecificData': <Object?>[0x4C, 0x00, 1, 2, 3],
+            'serviceUuids': <Object?>['abcd'],
+          },
+          sink,
+        );
+
+        final record = sink.results.single.scanRecord;
+        expect(record?.manufacturerSpecificData, {
+          76: Uint8List.fromList([1, 2, 3]),
+        });
+        expect(record?.deviceName, 'Sensor');
+        expect(record?.serviceUuids, ['abcd']);
+        expect(sink.results.single.device?.address, 'AA:BB:CC:DD:EE:FF');
+      },
+      skip: !isApple,
+    );
+
+    test(
+      'drops manufacturer data shorter than an id plus a byte',
+      () {
+        final sink = _ListSink();
+
+        ble.handleData(
+          <Object?, Object?>{
+            'address': 'AA:BB',
+            'manufacturerSpecificData': <Object?>[0x4C, 0x00],
+          },
+          sink,
+        );
+
+        final record = sink.results.single.scanRecord;
+        expect(record?.manufacturerSpecificData, isNull);
+      },
+      skip: !isApple,
+    );
+
+    test(
+      'defaults a missing address to an empty string',
+      () {
+        final sink = _ListSink();
+
+        ble.handleData(<Object?, Object?>{'rssi': -70}, sink);
+
+        expect(sink.results.single.device?.address, '');
+      },
+      skip: !isApple,
+    );
+  });
+}
