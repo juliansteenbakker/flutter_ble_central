@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_ble_central'
-  s.version          = '0.2.0'
+  s.version          = '0.3.3'
   s.summary          = 'A Flutter package for scanning BLE data in central mode.'
   s.description      = <<-DESC
 A Flutter package for scanning BLE data in central mode.
