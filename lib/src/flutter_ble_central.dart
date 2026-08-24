@@ -98,11 +98,6 @@ class FlutterBleCentral {
         : BluetoothCentralState.values[response];
   }
 
-  /// Returns `true` if advertising or false if not advertising
-  Future<bool> get isAdvertising async {
-    return await _methodChannel.invokeMethod<bool>('isAdvertising') ?? false;
-  }
-
   /// Returns `true` if advertising over BLE is supported
   Future<bool> get isSupported async =>
       await _methodChannel.invokeMethod<bool>('isSupported') ?? false;
