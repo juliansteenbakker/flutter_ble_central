@@ -175,6 +175,73 @@ Set `useLightweightScanResult: true` to receive only the fields most apps need
 (address, manufacturer data, service UUIDs). It measurably reduces work per
 advertisement when scanning in a busy environment.
 
+### Connecting
+
+Android only for now. Connect to a device found by scanning, discover what it serves,
+then read, write or subscribe.
+
+```dart
+await ble.connect(address: address);
+
+final services = await ble.discoverServices(address);
+
+await ble.setCharacteristicNotification(
+  address: address,
+  serviceUuid: serviceUuid,
+  characteristicUuid: txUuid,
+  enable: true,
+);
+
+ble.onCharacteristicValueChanged.listen((event) {
+  // The peripheral notified on a characteristic.
+});
+
+await ble.writeCharacteristic(
+  address: address,
+  serviceUuid: serviceUuid,
+  characteristicUuid: rxUuid,
+  value: Uint8List.fromList([1, 2, 3]),
+);
+
+await ble.disconnect(address);
+```
+
+`connect` returns as soon as the request is in. Wait for
+`onConnectionStateChanged` to report `GattConnectionState.connected` before
+discovering services.
+
+Also available: `readCharacteristic`, `readDescriptor`, `writeDescriptor`,
+`getConnectionState`, `requestMtu` and `readRssi`.
+
+### Pairing, PHY and reliable write
+
+```dart
+await ble.createBond(address);
+ble.onBondStateChanged.listen((event) => print(event.state));
+
+await ble.requestConnectionPriority(
+  address: address,
+  priority: ConnectionPriority.high,
+);
+
+await ble.setPreferredPhy(
+  address: address,
+  txPhy: GattPhy.le2M,
+  rxPhy: GattPhy.le2M,
+);
+final phy = await ble.readPhy(address);
+
+// Queued on the peripheral and echoed back for verification, then committed.
+await ble.beginReliableWrite(address);
+await ble.writeCharacteristic(...);
+await ble.executeReliableWrite(address);
+```
+
+Pairing usually needs the user to confirm it, so `createBond` returns as soon as the
+request is in and the outcome arrives on `onBondStateChanged`. `setPreferredPhy` is
+likewise a request: read it back with `readPhy` to see what the peripheral and the
+controller agreed on. PHY control needs Android 8.0.
+
 ### Streams
 
 | Stream | Type | Platforms |
@@ -183,6 +250,9 @@ advertisement when scanning in a busy environment.
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
 | `onPeripheralStateChanged` | `CentralState` | all |
+| `onConnectionStateChanged` | `ConnectionStateChange` | Android only |
+| `onCharacteristicValueChanged` | `CharacteristicValue` | Android only |
+| `onBondStateChanged` | `BondStateChange` | Android only |
 
 ## API
 
@@ -199,10 +269,41 @@ advertisement when scanning in a busy environment.
 | `openAppSettings()` | `void` | Opens this app's settings page |
 | `enableTimingStats` | `bool` field | Logs native timing information per scan result |
 
+Connection members, Android only:
+
+| Member | Returns | Description |
+| --- | --- | --- |
+| `connect({address, autoConnect, timeout})` | `void` | Opens a GATT connection |
+| `disconnect(address)` | `void` | Closes it |
+| `getConnectionState(address)` | `GattConnectionState` | The current link state |
+| `discoverServices(address)` | `List<GattService>` | What the peripheral serves |
+| `readCharacteristic({...})` | `Uint8List` | Reads a characteristic |
+| `writeCharacteristic({..., withoutResponse})` | `void` | Writes one |
+| `setCharacteristicNotification({..., enable})` | `void` | Subscribes or unsubscribes |
+| `readDescriptor({...})` | `Uint8List` | Reads a descriptor |
+| `writeDescriptor({...})` | `void` | Writes one |
+| `requestMtu({address, mtu})` | `int` | The negotiated MTU |
+| `readRssi(address)` | `int` | Signal strength of the connection |
+| `createBond(address)` | `void` | Starts pairing |
+| `removeBond(address)` | `void` | Removes the pairing |
+| `getBondState(address)` | `BondState` | Whether this device is paired |
+| `requestConnectionPriority({address, priority})` | `void` | Asks for a connection interval |
+| `readPhy(address)` | `(tx, rx)` of `GattPhy` | The PHY in use |
+| `setPreferredPhy({address, txPhy, rxPhy, phyOption})` | `void` | Asks to change it |
+| `beginReliableWrite(address)` | `void` | Opens a reliable write transaction |
+| `executeReliableWrite(address)` | `void` | Commits it |
+| `abortReliableWrite(address)` | `void` | Drops it |
+
 ## Example
 
-The [example app](example/lib/main.dart) is a full scanner: permission handling, adapter
-state, live results and scan settings. Run it with `cd example && flutter run`.
+The [example app](example/lib/main.dart) is a full scanner with a GATT client on top:
+permission handling, adapter state, live results, scan settings, and connecting to a
+peripheral to exchange bytes. Run it with `cd example && flutter run`.
+
+It is the central half of a pair. Run the
+[flutter_ble_peripheral](https://github.com/juliansteenbakker/flutter_ble_peripheral)
+example on a second device to connect to it; see
+[the example README](example/README.md#running-the-pair).
 
 ## Contributing
 

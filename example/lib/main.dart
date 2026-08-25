@@ -8,7 +8,32 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_ble_central/flutter_ble_central.dart';
+
+/// The first element `test` accepts, or null when it accepts none.
+///
+/// package:collection has this as firstWhereOrNull; it is inlined here so the
+/// example stays free of dependencies beyond the plugin itself.
+extension _FirstWhereOrNull<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T element) test) {
+    for (final element in this) {
+      if (test(element)) return element;
+    }
+    return null;
+  }
+}
+
+/// The service the flutter_ble_peripheral example advertises.
+const peripheralServiceUuid = 'bf27730d-860a-4e09-889c-2d8b6a9e0fe7';
+
+/// The characteristic that peripheral notifies on, exported there as
+/// `defaultTxCharacteristicUuid`. It is the Nordic UART Service TX.
+const peripheralTxUuid = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+/// The characteristic that peripheral accepts writes on, exported there as
+/// `defaultRxCharacteristicUuid`. It is the Nordic UART Service RX.
+const peripheralRxUuid = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
 void main() => runApp(const FlutterBleCentralExample());
 
@@ -31,11 +56,23 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
   StreamSubscription<ScanResult>? _scanResultSub;
   StreamSubscription<int>? _scanErrorSub;
   StreamSubscription<CentralState>? _stateChangedSub;
+  StreamSubscription<ConnectionStateChange>? _connectionStateSub;
+  StreamSubscription<CharacteristicValue>? _characteristicValueSub;
 
   bool _isSupported = false;
   bool _isScanning = false;
   int _packetsFound = 0;
   CentralState _centralState = CentralState.unknown;
+
+  /// The peripheral this example is talking to, once connected.
+  String? _connectedAddress;
+  String? _txUuid;
+  String? _rxUuid;
+  bool _connecting = false;
+
+  /// Bytes the peripheral notified on its TX characteristic, newest first.
+  final List<Uint8List> _received = [];
+  final _sendController = TextEditingController(text: '0A 0B 0C');
 
   @override
   void initState() {
@@ -50,6 +87,9 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     unawaited(_scanResultSub?.cancel());
     unawaited(_scanErrorSub?.cancel());
     unawaited(_stateChangedSub?.cancel());
+    unawaited(_connectionStateSub?.cancel());
+    unawaited(_characteristicValueSub?.cancel());
+    _sendController.dispose();
     super.dispose();
   }
 
@@ -232,6 +272,159 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     setState(() => _isScanning = false);
   }
 
+  // --- GATT ----------------------------------------------------------------
+
+  /// Connects to [address], finds the peripheral's TX/RX pair and subscribes.
+  Future<void> _connect(String address) async {
+    setState(() => _connecting = true);
+    try {
+      await _stopScan();
+      await _ble.connect(address: address);
+
+      // connect returns as soon as the request is in; the link is up when the
+      // connection state stream says so.
+      await _ble.onConnectionStateChanged
+          .where(
+            (event) =>
+                event.address == address &&
+                event.state == GattConnectionState.connected,
+          )
+          .first
+          .timeout(const Duration(seconds: 15));
+
+      final services = await _ble.discoverServices(address);
+      final service = services.firstWhereOrNull(
+        (s) => s.uuid.toLowerCase() == peripheralServiceUuid.toLowerCase(),
+      );
+      if (service == null) {
+        _showSnackBar('$peripheralServiceUuid not found', isError: true);
+        await _ble.disconnect(address);
+        return;
+      }
+
+      final characteristics = service.characteristics ?? [];
+      final tx = _pick(
+        characteristics,
+        peripheralTxUuid,
+        (p) => p.notify || p.indicate,
+      );
+      final rx = _pick(
+        characteristics,
+        peripheralRxUuid,
+        (p) => p.write || p.writeWithoutResponse,
+      );
+      if (tx == null || rx == null) {
+        _showSnackBar('No TX/RX pair on the service', isError: true);
+        await _ble.disconnect(address);
+        return;
+      }
+
+      await _ble.setCharacteristicNotification(
+        address: address,
+        serviceUuid: service.uuid,
+        characteristicUuid: tx.uuid,
+        enable: true,
+      );
+
+      _characteristicValueSub ??=
+          _ble.onCharacteristicValueChanged.listen((event) {
+        if (event.characteristicUuid != _txUuid) return;
+        setState(() => _received.insert(0, event.value));
+      });
+
+      _connectionStateSub ??= _ble.onConnectionStateChanged.listen((event) {
+        if (event.address != _connectedAddress) return;
+        if (event.state == GattConnectionState.disconnected) {
+          setState(() {
+            _connectedAddress = null;
+            _txUuid = null;
+            _rxUuid = null;
+          });
+          _showSnackBar('Disconnected');
+        }
+      });
+
+      setState(() {
+        _connectedAddress = address;
+        _txUuid = tx.uuid;
+        _rxUuid = rx.uuid;
+        _received.clear();
+      });
+      _showSnackBar('Connected and subscribed');
+    } on TimeoutException {
+      _showSnackBar('Timed out connecting to $address', isError: true);
+    } on PlatformException catch (error) {
+      _showSnackBar('Connect failed: ${error.message}', isError: true);
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  /// Prefers the documented uuid, and falls back to whatever carries the right
+  /// properties, so a peripheral that serves its own layout still works.
+  GattCharacteristic? _pick(
+    List<GattCharacteristic> characteristics,
+    String uuid,
+    bool Function(GattCharacteristicProperties) matches,
+  ) {
+    final byUuid = characteristics.firstWhereOrNull(
+      (c) => c.uuid.toLowerCase() == uuid.toLowerCase(),
+    );
+    return byUuid ??
+        characteristics.firstWhereOrNull((c) => matches(c.properties));
+  }
+
+  Future<void> _disconnect() async {
+    final address = _connectedAddress;
+    if (address == null) return;
+    await _ble.disconnect(address);
+    setState(() {
+      _connectedAddress = null;
+      _txUuid = null;
+      _rxUuid = null;
+    });
+  }
+
+  /// Writes the hex bytes in the field to the peripheral's RX characteristic.
+  Future<void> _send() async {
+    final address = _connectedAddress;
+    final rxUuid = _rxUuid;
+    if (address == null || rxUuid == null) return;
+
+    final bytes = _parseHex(_sendController.text);
+    if (bytes == null) {
+      _showSnackBar(
+        'Enter data as hex bytes, for example 01 02 03',
+        isError: true,
+      );
+      return;
+    }
+
+    try {
+      await _ble.writeCharacteristic(
+        address: address,
+        serviceUuid: peripheralServiceUuid,
+        characteristicUuid: rxUuid,
+        value: bytes,
+      );
+      _showSnackBar('Sent ${bytes.length} bytes');
+    } on PlatformException catch (error) {
+      _showSnackBar('Write failed: ${error.message}', isError: true);
+    }
+  }
+
+  Uint8List? _parseHex(String input) {
+    if (input.trim().isEmpty) return null;
+    try {
+      final values = input.split(RegExp(r'[\s,]+')).where((s) => s.isNotEmpty);
+      return Uint8List.fromList(
+        values.map((hex) => int.parse(hex, radix: 16)).toList(),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -377,6 +570,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
               const SizedBox(height: 8),
 
               // Device List
+              if (_connectedAddress != null) _buildGattCard(context),
               if (_devices.isEmpty)
                 Center(
                   child: Column(
@@ -430,6 +624,9 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                         ),
                         title: Text(name),
                         subtitle: Text(address),
+                        onTap: _connecting || _connectedAddress != null
+                            ? null
+                            : () => _connect(address),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -449,6 +646,69 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// What the peripheral link can do, once one is up.
+  Widget _buildGattCard(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.swap_horiz),
+                const SizedBox(width: 8),
+                Text('GATT', style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _disconnect,
+                  icon: const Icon(Icons.link_off),
+                  label: const Text('Disconnect'),
+                ),
+              ],
+            ),
+            Text(
+              'Connected to $_connectedAddress\n'
+              'TX $_txUuid\n'
+              'RX $_rxUuid',
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _sendController,
+              decoration: const InputDecoration(
+                labelText: 'Data to send (hex bytes)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _send,
+              icon: const Icon(Icons.send),
+              label: const Text('Write to RX'),
+            ),
+            const SizedBox(height: 12),
+            if (_received.isEmpty)
+              const Text('Nothing received yet')
+            else
+              ..._received.take(5).map(
+                    (data) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        data
+                            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                            .join(' '),
+                        style: const TextStyle(fontFamily: 'monospace'),
+                      ),
+                    ),
+                  ),
+          ],
         ),
       ),
     );

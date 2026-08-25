@@ -179,6 +179,158 @@ void main() {
     });
   });
 
+  // These reach Android only, but the channel payload is built in Dart, so the
+  // wire contract is worth pinning wherever the tests run.
+  group('pairing', () {
+    test('createBond and removeBond send the address', () async {
+      await ble.createBond('AA:BB');
+      await ble.removeBond('AA:BB');
+
+      expect(calls.map((c) => c.method), ['createBond', 'removeBond']);
+      expect(calls.first.arguments, {'address': 'AA:BB'});
+    });
+
+    // The states are Android's BOND_* constants rather than the enum's index,
+    // so a value read as an index would be wrong by ten.
+    test('getBondState maps the native constant', () async {
+      response = 12;
+      expect(await ble.getBondState('AA:BB'), BondState.bonded);
+
+      response = 11;
+      expect(await ble.getBondState('AA:BB'), BondState.bonding);
+
+      response = null;
+      expect(await ble.getBondState('AA:BB'), BondState.none);
+    });
+
+    test('the enum carries the native values', () {
+      expect(BondState.none.value, 10);
+      expect(BondState.bonding.value, 11);
+      expect(BondState.bonded.value, 12);
+    });
+  });
+
+  group('connection tuning', () {
+    test('requestConnectionPriority sends the native value', () async {
+      await ble.requestConnectionPriority(
+        address: 'AA:BB',
+        priority: ConnectionPriority.lowPower,
+      );
+
+      expect(calls.single.method, 'requestConnectionPriority');
+      expect(calls.single.arguments, {'address': 'AA:BB', 'priority': 2});
+    });
+
+    test('readPhy maps both directions', () async {
+      response = {'txPhy': 2, 'rxPhy': 3};
+
+      final phy = await ble.readPhy('AA:BB');
+
+      expect(phy.tx, GattPhy.le2M);
+      expect(phy.rx, GattPhy.leCoded);
+    });
+
+    test('readPhy falls back to 1M when the platform says nothing', () async {
+      final phy = await ble.readPhy('AA:BB');
+
+      expect(phy.tx, GattPhy.le1M);
+      expect(phy.rx, GattPhy.le1M);
+    });
+
+    test('setPreferredPhy sends the native values', () async {
+      await ble.setPreferredPhy(
+        address: 'AA:BB',
+        txPhy: GattPhy.le2M,
+        rxPhy: GattPhy.leCoded,
+        phyOption: PhyOption.s8,
+      );
+
+      expect(calls.single.arguments, {
+        'address': 'AA:BB',
+        'txPhy': 2,
+        'rxPhy': 3,
+        'phyOptions': 2,
+      });
+    });
+
+    test('setPreferredPhy defaults to no preferred coding', () async {
+      await ble.setPreferredPhy(
+        address: 'AA:BB',
+        txPhy: GattPhy.le1M,
+        rxPhy: GattPhy.le1M,
+      );
+
+      expect((calls.single.arguments as Map)['phyOptions'], 0);
+    });
+  });
+
+  group('reliable write', () {
+    test('the three calls send the address', () async {
+      await ble.beginReliableWrite('AA:BB');
+      await ble.executeReliableWrite('AA:BB');
+      await ble.abortReliableWrite('AA:BB');
+
+      expect(calls.map((c) => c.method), [
+        'beginReliableWrite',
+        'executeReliableWrite',
+        'abortReliableWrite',
+      ]);
+      expect(calls.last.arguments, {'address': 'AA:BB'});
+    });
+  });
+
+  group('event parsing', () {
+    test('a connection state change', () {
+      final event = ConnectionStateChange.fromPlatform({
+        'address': 'AA:BB',
+        'state': GattConnectionState.connected.index,
+      });
+
+      expect(event.address, 'AA:BB');
+      expect(event.state, GattConnectionState.connected);
+    });
+
+    test('a connection state out of range falls back to disconnected', () {
+      final event = ConnectionStateChange.fromPlatform({'state': 99});
+
+      expect(event.state, GattConnectionState.disconnected);
+      expect(event.address, '');
+    });
+
+    test('a characteristic value', () {
+      final event = CharacteristicValue.fromPlatform({
+        'address': 'AA:BB',
+        'serviceUuid': 'abcd',
+        'characteristicUuid': 'ef01',
+        'value': Uint8List.fromList([1, 2, 3]),
+      });
+
+      expect(event.serviceUuid, 'abcd');
+      expect(event.characteristicUuid, 'ef01');
+      expect(event.value, [1, 2, 3]);
+    });
+
+    // Windows hands the bytes back as a plain list rather than a byte buffer.
+    test('a characteristic value sent as a list', () {
+      final event = CharacteristicValue.fromPlatform({
+        'value': [1, 2, 3],
+      });
+
+      expect(event.value, isA<Uint8List>());
+      expect(event.value, [1, 2, 3]);
+    });
+
+    test('a bond state change', () {
+      final event = BondStateChange.fromPlatform({
+        'address': 'AA:BB',
+        'bondState': 12,
+      });
+
+      expect(event.address, 'AA:BB');
+      expect(event.state, BondState.bonded);
+    });
+  });
+
   group('settings shortcuts', () {
     test('invoke their channel method', () async {
       await ble.openBluetoothSettings();
