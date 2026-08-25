@@ -91,9 +91,33 @@ FlutterBleCentralPlugin::FlutterBleCentralPlugin() {
   InitializeAsync();
   }
 
-FlutterBleCentralPlugin::~FlutterBleCentralPlugin() {}
+FlutterBleCentralPlugin::~FlutterBleCentralPlugin() {
+  // Revoke before the members go away: a radio or watcher event firing
+  // afterwards would run against a destroyed plugin.
+  *alive_ = false;
+  try {
+    if (bluetoothRadio && radioStateChangedToken) {
+      bluetoothRadio.StateChanged(radioStateChangedToken);
+    }
+    if (bluetoothLEWatcher) {
+      if (bluetoothLEWatcherReceivedToken) {
+        bluetoothLEWatcher.Received(bluetoothLEWatcherReceivedToken);
+      }
+      if (bluetoothLEWatcherStoppedToken) {
+        bluetoothLEWatcher.Stopped(bluetoothLEWatcherStoppedToken);
+      }
+      if (bluetoothLEWatcher.Status() == BluetoothLEAdvertisementWatcherStatus::Started) {
+        bluetoothLEWatcher.Stop();
+      }
+    }
+  }
+  catch (...) {
+    // Nothing useful to do while tearing down.
+  }
+}
 
 winrt::fire_and_forget FlutterBleCentralPlugin::InitializeAsync() {
+  auto alive = alive_;
   try {
     auto bluetoothAdapter = co_await BluetoothAdapter::GetDefaultAsync();
     if (bluetoothAdapter) {
@@ -116,6 +140,13 @@ winrt::fire_and_forget FlutterBleCentralPlugin::InitializeAsync() {
   catch (...) {
     bluetoothRadio = nullptr;
   }
+
+  // Until this has run there is no adapter to report on, so a listener that
+  // attached in the meantime is still sitting on unknown.
+  auto state = GetCurrentState();
+  co_await ui_thread_;
+  if (!*alive) co_return;
+  PublishState(state);
 }
 
 void FlutterBleCentralPlugin::HandleMethodCall(
@@ -179,7 +210,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
           bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
           bluetoothLEWatcher.ScanningMode(BluetoothLEScanningMode::Active);
           bluetoothLEWatcherReceivedToken = bluetoothLEWatcher.Received({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Received });
-          bluetoothLEWatcher.Stopped({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped });
+          bluetoothLEWatcherStoppedToken = bluetoothLEWatcher.Stopped({ this, &FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped });
         }
         auto status = bluetoothLEWatcher.Status();
         if (status != BluetoothLEAdvertisementWatcherStatus::Started) {
@@ -198,11 +229,16 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         if (bluetoothLEWatcher) {
           bluetoothLEWatcher.Stop();
           bluetoothLEWatcher.Received(bluetoothLEWatcherReceivedToken);
+          bluetoothLEWatcher.Stopped(bluetoothLEWatcherStoppedToken);
         }
+        bluetoothLEWatcherReceivedToken = {};
+        bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
         result->Success(flutter::EncodableValue());
       }
       catch (...) {
+        bluetoothLEWatcherReceivedToken = {};
+        bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
         result->Error("stop_failed", "Failed to stop scanning");
       }
@@ -260,6 +296,7 @@ void FlutterBleCentralPlugin::BluetoothLEWatcher_Stopped(
 winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     BluetoothLEAdvertisementWatcher sender,
     BluetoothLEAdvertisementReceivedEventArgs args) {
+  auto alive = alive_;
   try {
     // Extract all data on the callback thread first
     auto manufacturer_data = parseManufacturerData(args.Advertisement());
@@ -279,6 +316,7 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
 
     // Switch to UI thread before sending to Flutter
     co_await ui_thread_;
+    if (!*alive) co_return;
 
     if (scan_result_sink_) {
       scan_result_sink_->Success(flutter::EncodableMap{
@@ -317,8 +355,7 @@ std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBle
     std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
 {
   state_changed_sink_ = std::move(events);
-  // Send current state to new listener
-  PublishState(GetCurrentState());
+  SendCurrentState();
   return nullptr;
 }
 
@@ -330,9 +367,11 @@ std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> FlutterBle
 }
 
 winrt::fire_and_forget FlutterBleCentralPlugin::OnRadioStateChanged(Radio sender, IInspectable args) {
+  auto alive = alive_;
   try {
     auto state = GetCurrentState();
     co_await ui_thread_;
+    if (!*alive) co_return;
     PublishState(state);
   }
   catch (...) {
@@ -364,13 +403,24 @@ int FlutterBleCentralPlugin::GetCurrentState() {
 }
 
 void FlutterBleCentralPlugin::PublishState(int state) {
+  // The radio can report the same state more than once; the repeat says
+  // nothing new.
+  if (state == central_state_) {
+    return;
+  }
+  central_state_ = state;
+  SendCurrentState();
+}
+
+void FlutterBleCentralPlugin::SendCurrentState() {
   if (state_changed_sink_) {
-    state_changed_sink_->Success(flutter::EncodableValue(state));
+    state_changed_sink_->Success(flutter::EncodableValue(central_state_));
   }
 }
 
 winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  auto alive = alive_;
   if (!bluetoothRadio) {
     result->Success(flutter::EncodableValue(false));
     co_return;
@@ -379,6 +429,7 @@ winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
   bool success = false;
   try {
     auto accessStatus = co_await Radio::RequestAccessAsync();
+    if (!*alive) co_return;
     if (accessStatus == RadioAccessStatus::Allowed) {
       auto setResult = co_await bluetoothRadio.SetStateAsync(RadioState::On);
       success = (setResult == RadioAccessStatus::Allowed);
@@ -387,6 +438,7 @@ winrt::fire_and_forget FlutterBleCentralPlugin::EnableBluetoothAsync(
     success = false;
   }
   co_await ui_thread_;
+  if (!*alive) co_return;
   result->Success(flutter::EncodableValue(success));
 }
 

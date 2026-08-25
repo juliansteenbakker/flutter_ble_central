@@ -20,6 +20,7 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/standard_message_codec.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -79,6 +80,7 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   BluetoothLEAdvertisementWatcher bluetoothLEWatcher{ nullptr };
   winrt::event_token bluetoothLEWatcherReceivedToken;
+  winrt::event_token bluetoothLEWatcherStoppedToken;
   winrt::fire_and_forget BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
   void BluetoothLEWatcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args);
 
@@ -90,8 +92,24 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
       const flutter::EncodableValue* arguments);
 
   winrt::fire_and_forget OnRadioStateChanged(Radio sender, IInspectable args);
+
+  // Publishes a state unless it is the one already reported, and remembers it
+  // for a listener attaching later. Must be called on the UI thread.
   void PublishState(int state);
+
+  // Hands the current state to a listener that just attached.
+  void SendCurrentState();
+
   int GetCurrentState();
+
+  // The last state published. Until InitializeAsync has looked the adapter up
+  // there is nothing to report on, so it starts out unknown rather than
+  // claiming the adapter is unsupported.
+  int central_state_ = 0;
+
+  // Cleared when the plugin is destroyed, so that a coroutine resuming after
+  // the fact does not touch it.
+  std::shared_ptr<std::atomic_bool> alive_ = std::make_shared<std::atomic_bool>(true);
 
   winrt::fire_and_forget EnableBluetoothAsync(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
