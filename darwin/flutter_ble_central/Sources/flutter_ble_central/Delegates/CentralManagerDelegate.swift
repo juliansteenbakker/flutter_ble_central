@@ -33,6 +33,15 @@ final class CentralManagerDelegate: NSObject, CBCentralManagerDelegate {
     /// Called whenever a new peripheral is discovered during scanning.
     private let onDiscovery: DiscoveryHandler
 
+    /// Called when a connection attempt succeeds.
+    var onConnect: ((CBPeripheral) -> Void)?
+
+    /// Called when a connection attempt fails.
+    var onFailToConnect: ((CBPeripheral, Error?) -> Void)?
+
+    /// Called when a link drops, by request or otherwise.
+    var onDisconnect: ((CBPeripheral, Error?) -> Void)?
+
     /**
      Creates a new delegate with state and discovery callbacks.
 
@@ -73,5 +82,28 @@ final class CentralManagerDelegate: NSObject, CBCentralManagerDelegate {
         rssi: NSNumber
     ) {
         onDiscovery(peripheral, advertisementData, rssi.intValue)
+    }
+
+    /// Called by CoreBluetooth once a connection is up.
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        onConnect?(peripheral)
+    }
+
+    /// Called by CoreBluetooth when a connection could not be established.
+    func centralManager(
+        _ central: CBCentralManager,
+        didFailToConnect peripheral: CBPeripheral,
+        error: Error?
+    ) {
+        onFailToConnect?(peripheral, error)
+    }
+
+    /// Called by CoreBluetooth when a link drops.
+    func centralManager(
+        _ central: CBCentralManager,
+        didDisconnectPeripheral peripheral: CBPeripheral,
+        error: Error?
+    ) {
+        onDisconnect?(peripheral, error)
     }
 }

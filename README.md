@@ -177,8 +177,8 @@ advertisement when scanning in a busy environment.
 
 ### Connecting
 
-Android only for now. Connect to a device found by scanning, discover what it serves,
-then read, write or subscribe.
+Connect to a device found by scanning, discover what it serves, then read, write or
+subscribe. Android, iOS and macOS; Windows is scan-only for now.
 
 ```dart
 await ble.connect(address: address);
@@ -209,6 +209,11 @@ await ble.disconnect(address);
 `connect` returns as soon as the request is in. Wait for
 `onConnectionStateChanged` to report `GattConnectionState.connected` before
 discovering services.
+
+`address` is whatever the scan result reported. On Android and Windows that is the
+hardware address; on iOS and macOS CoreBluetooth never exposes one, so it is the
+per-app identifier instead. That identifier only resolves for a peripheral this app
+has scanned or connected to before, and differs between apps and devices.
 
 Also available: `readCharacteristic`, `readDescriptor`, `writeDescriptor`,
 `getConnectionState`, `requestMtu` and `readRssi`.
@@ -242,6 +247,12 @@ request is in and the outcome arrives on `onBondStateChanged`. `setPreferredPhy`
 likewise a request: read it back with `readPhy` to see what the peripheral and the
 controller agreed on. PHY control needs Android 8.0.
 
+These four are Android only, and throw `UNSUPPORTED` on iOS and macOS.
+CoreBluetooth drives pairing from the system when a peripheral demands it, chooses
+the connection interval itself, and exposes neither PHY control nor reliable write.
+`requestMtu` works everywhere, but on Apple the size asked for is ignored and the
+negotiated one is returned.
+
 ### Streams
 
 | Stream | Type | Platforms |
@@ -250,8 +261,8 @@ controller agreed on. PHY control needs Android 8.0.
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
 | `onPeripheralStateChanged` | `CentralState` | all |
-| `onConnectionStateChanged` | `ConnectionStateChange` | Android only |
-| `onCharacteristicValueChanged` | `CharacteristicValue` | Android only |
+| `onConnectionStateChanged` | `ConnectionStateChange` | Android, iOS, macOS |
+| `onCharacteristicValueChanged` | `CharacteristicValue` | Android, iOS, macOS |
 | `onBondStateChanged` | `BondStateChange` | Android only |
 
 ## API
@@ -269,7 +280,7 @@ controller agreed on. PHY control needs Android 8.0.
 | `openAppSettings()` | `void` | Opens this app's settings page |
 | `enableTimingStats` | `bool` field | Logs native timing information per scan result |
 
-Connection members, Android only:
+Connection members. Android, iOS and macOS unless noted:
 
 | Member | Returns | Description |
 | --- | --- | --- |
@@ -284,15 +295,15 @@ Connection members, Android only:
 | `writeDescriptor({...})` | `void` | Writes one |
 | `requestMtu({address, mtu})` | `int` | The negotiated MTU |
 | `readRssi(address)` | `int` | Signal strength of the connection |
-| `createBond(address)` | `void` | Starts pairing |
-| `removeBond(address)` | `void` | Removes the pairing |
-| `getBondState(address)` | `BondState` | Whether this device is paired |
-| `requestConnectionPriority({address, priority})` | `void` | Asks for a connection interval |
-| `readPhy(address)` | `(tx, rx)` of `GattPhy` | The PHY in use |
-| `setPreferredPhy({address, txPhy, rxPhy, phyOption})` | `void` | Asks to change it |
-| `beginReliableWrite(address)` | `void` | Opens a reliable write transaction |
-| `executeReliableWrite(address)` | `void` | Commits it |
-| `abortReliableWrite(address)` | `void` | Drops it |
+| `createBond(address)` | `void` | Starts pairing. Android only |
+| `removeBond(address)` | `void` | Removes the pairing. Android only |
+| `getBondState(address)` | `BondState` | Whether this device is paired. Android only |
+| `requestConnectionPriority({address, priority})` | `void` | Asks for a connection interval. Android only |
+| `readPhy(address)` | `(tx, rx)` of `GattPhy` | The PHY in use. Android only |
+| `setPreferredPhy({address, txPhy, rxPhy, phyOption})` | `void` | Asks to change it. Android only |
+| `beginReliableWrite(address)` | `void` | Opens a reliable write transaction. Android only |
+| `executeReliableWrite(address)` | `void` | Commits it. Android only |
+| `abortReliableWrite(address)` | `void` | Drops it. Android only |
 
 ## Example
 

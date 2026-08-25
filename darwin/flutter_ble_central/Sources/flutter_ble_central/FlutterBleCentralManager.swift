@@ -40,8 +40,8 @@ final class FlutterBleCentralManager {
     /// Indicates whether a BLE scan is currently active.
     private(set) var isScanning = false
 
-    /// Map of discovered peripherals by their `UUID`.
-    private(set) var activePeripherals = [PeripheralID: CBPeripheral]()
+    /// Connects to peripherals and talks GATT to them.
+    private(set) var gattConnectionManager: GattConnectionManager!
 
     /// Queue CoreBluetooth delivers its callbacks on.
     ///
@@ -63,13 +63,21 @@ final class FlutterBleCentralManager {
      */
     init(
         scanResultHandler: ScanResultHandler,
-        stateChangedHandler: StateChangedHandler
+        stateChangedHandler: StateChangedHandler,
+        connectionStateHandler: ConnectionStateHandler,
+        characteristicValueHandler: CharacteristicValueHandler
     ) {
+        // The delegate needs the connection manager and the connection manager
+        // needs the central manager, so the discovery hop is deferred.
+        var forwardDiscovery: ((CBPeripheral) -> Void)?
+
         self.centralManagerDelegate = CentralManagerDelegate(
             onStateChange: { state in
                 stateChangedHandler.publishPeripheralState(state: state)
             },
             onDiscovery: { peripheral, advertisementData, rssi in
+                // Hold on to it, so connect can find it by identifier later.
+                forwardDiscovery?(peripheral)
                 scanResultHandler.publishScanResult(
                     advertiseData: advertisementData,
                     rssi: rssi,
@@ -82,6 +90,24 @@ final class FlutterBleCentralManager {
             delegate: self.centralManagerDelegate,
             queue: callbackQueue
         )
+
+        self.gattConnectionManager = GattConnectionManager(
+            centralManager: centralManager,
+            connectionStateHandler: connectionStateHandler,
+            characteristicValueHandler: characteristicValueHandler
+        )
+
+        let gatt = self.gattConnectionManager!
+        forwardDiscovery = { [weak gatt] peripheral in gatt?.remember(peripheral) }
+        centralManagerDelegate.onConnect = { [weak gatt] peripheral in
+            gatt?.handleConnect(peripheral)
+        }
+        centralManagerDelegate.onFailToConnect = { [weak gatt] peripheral, error in
+            gatt?.handleFailToConnect(peripheral, error: error)
+        }
+        centralManagerDelegate.onDisconnect = { [weak gatt] peripheral, error in
+            gatt?.handleDisconnect(peripheral, error: error)
+        }
     }
 
     /**

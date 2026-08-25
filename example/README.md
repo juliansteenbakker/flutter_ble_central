@@ -83,8 +83,9 @@ await ble.writeCharacteristic(
 | | Scanning | Connecting |
 | --- | --- | --- |
 | Android | yes | yes |
-| iOS | yes | not yet |
-| macOS | yes | not yet |
+| iOS | yes | yes |
+| macOS | yes | yes |
 | Windows | yes | not yet |
 
-Connecting is Android only for now; see `GATT_PLAN.md` in the repository root.
+Pairing, connection priority, PHY control and reliable write are Android only, since
+CoreBluetooth exposes none of them.
