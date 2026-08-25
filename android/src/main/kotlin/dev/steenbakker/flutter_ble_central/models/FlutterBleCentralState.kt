@@ -10,21 +10,22 @@ package dev.steenbakker.flutter_ble_central.models
  * Some states are platform-specific (e.g., iOS-only values are retained
  * for API compatibility across platforms).
  *
- * @property value The integer value used when serializing state to Flutter.
+ * The ordinal of each entry is what gets sent to Flutter, where it indexes
+ * BluetoothCentralState, so the order must stay in sync with that enum.
  */
-enum class FlutterBleCentralState(val value: Int) {
+enum class FlutterBleCentralState {
 
     /**
      * The user granted access to the requested feature.
      * (e.g., Bluetooth permission granted and adapter is enabled).
      */
-    Granted(1),
+    Granted,
 
     /**
      * The user denied access to the requested feature.
      * The app can still request the permission again.
      */
-    Denied(2),
+    Denied,
 
     /**
      * Permission to the requested feature is permanently denied.
@@ -32,7 +33,7 @@ enum class FlutterBleCentralState(val value: Int) {
      * The permission dialog will **not** be shown when requesting this permission.
      * The user may still change the permission status in system settings.
      */
-    PermanentlyDenied(3),
+    PermanentlyDenied,
 
     /**
      * The user cannot change this app's permission status,
@@ -40,36 +41,36 @@ enum class FlutterBleCentralState(val value: Int) {
      *
      * ⚠️ Only supported on **iOS**.
      */
-    Restricted(4),
+    Restricted,
 
     /**
      * The user has authorized this application for **limited access**.
      *
      * ⚠️ Only supported on **iOS 14+**.
      */
-    Limited(5),
+    Limited,
 
     /**
      * Bluetooth is turned off.
      * Permissions may be granted, but the adapter is disabled.
      */
-    TurnedOff(6),
+    TurnedOff,
 
     /**
      * The device does not support Bluetooth or the required feature.
      */
-    Unsupported(7),
+    Unsupported,
 
     /**
      * The status is unknown.
      *
      * Typically returned when the permission state cannot be determined.
      */
-    Unknown(8),
+    Unknown,
 
     /**
      * Bluetooth is fully available and ready to use.
      * This indicates that permissions are granted and the adapter is enabled.
      */
-    Ready(9),
+    Ready,
 }
