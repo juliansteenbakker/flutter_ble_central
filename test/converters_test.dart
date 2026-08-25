@@ -81,6 +81,9 @@ void main() {
       expect(converter.toJson(decoded), {
         uuid: const [16, 32],
       });
+      // Not a Uint8List: ScanRecord.toJson declares plain int lists, and the
+      // two compare equal, so only the type catches the difference.
+      expect(converter.toJson(decoded)![uuid], isNot(isA<Uint8List>()));
     });
 
     test('passes null through', () {
