@@ -248,12 +248,12 @@ class FlutterBleCentralManager(context: Context) {
    * Returns the current Bluetooth adapter state as a [FlutterBleCentralState] enum.
    *
    * @return [FlutterBleCentralState.Unsupported] if adapter is null,
-   * [FlutterBleCentralState.Denied] if disabled, [FlutterBleCentralState.Ready] if enabled.
+   * [FlutterBleCentralState.TurnedOff] if disabled, [FlutterBleCentralState.Ready] if enabled.
    */
   fun getBluetoothState(): FlutterBleCentralState {
     val adapter = mBluetoothManager?.adapter
     return if (adapter == null) FlutterBleCentralState.Unsupported
-    else if (!adapter.isEnabled) FlutterBleCentralState.Denied
+    else if (!adapter.isEnabled) FlutterBleCentralState.TurnedOff
     else FlutterBleCentralState.Ready
   }
 
