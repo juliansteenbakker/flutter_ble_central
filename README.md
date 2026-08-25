@@ -178,7 +178,7 @@ advertisement when scanning in a busy environment.
 ### Connecting
 
 Connect to a device found by scanning, discover what it serves, then read, write or
-subscribe. Android, iOS and macOS; Windows is scan-only for now.
+subscribe. Android, iOS, macOS and Windows.
 
 ```dart
 await ble.connect(address: address);
@@ -210,10 +210,11 @@ await ble.disconnect(address);
 `onConnectionStateChanged` to report `GattConnectionState.connected` before
 discovering services.
 
-`address` is whatever the scan result reported. On Android and Windows that is the
-hardware address; on iOS and macOS CoreBluetooth never exposes one, so it is the
-per-app identifier instead. That identifier only resolves for a peripheral this app
-has scanned or connected to before, and differs between apps and devices.
+`address` is whatever the scan result reported, and its shape differs by platform: a
+colon separated hardware address on Android, the decimal form of the same 48 bit value
+on Windows, and on iOS and macOS the per-app identifier CoreBluetooth hands out
+instead of an address, which only resolves for a peripheral this app has scanned or
+connected to before. Pass it back unchanged rather than parsing it.
 
 Also available: `readCharacteristic`, `readDescriptor`, `writeDescriptor`,
 `getConnectionState`, `requestMtu` and `readRssi`.
@@ -247,11 +248,20 @@ request is in and the outcome arrives on `onBondStateChanged`. `setPreferredPhy`
 likewise a request: read it back with `readPhy` to see what the peripheral and the
 controller agreed on. PHY control needs Android 8.0.
 
-These four are Android only, and throw `UNSUPPORTED` on iOS and macOS.
-CoreBluetooth drives pairing from the system when a peripheral demands it, chooses
-the connection interval itself, and exposes neither PHY control nor reliable write.
-`requestMtu` works everywhere, but on Apple the size asked for is ignored and the
-negotiated one is returned.
+What each platform carries differs:
+
+| | Android | iOS, macOS | Windows |
+| --- | --- | --- | --- |
+| Pairing | yes | no | yes |
+| Connection priority | yes | no | no |
+| PHY control | Android 8.0+ | no | no |
+| Reliable write | yes | no | no |
+| `readRssi` | yes | yes | no |
+| `requestMtu` | honours the size | reports the negotiated one | reports the negotiated one |
+
+Anything unsupported throws `UNSUPPORTED` with an explanation rather than failing
+silently. CoreBluetooth drives pairing from the system when a peripheral demands it;
+Windows reports RSSI from advertisements only, never for a link already up.
 
 ### Streams
 
@@ -261,9 +271,9 @@ negotiated one is returned.
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
 | `onPeripheralStateChanged` | `CentralState` | all |
-| `onConnectionStateChanged` | `ConnectionStateChange` | Android, iOS, macOS |
-| `onCharacteristicValueChanged` | `CharacteristicValue` | Android, iOS, macOS |
-| `onBondStateChanged` | `BondStateChange` | Android only |
+| `onConnectionStateChanged` | `ConnectionStateChange` | all |
+| `onCharacteristicValueChanged` | `CharacteristicValue` | all |
+| `onBondStateChanged` | `BondStateChange` | Android, Windows |
 
 ## API
 
@@ -280,7 +290,7 @@ negotiated one is returned.
 | `openAppSettings()` | `void` | Opens this app's settings page |
 | `enableTimingStats` | `bool` field | Logs native timing information per scan result |
 
-Connection members. Android, iOS and macOS unless noted:
+Connection members. All platforms unless noted:
 
 | Member | Returns | Description |
 | --- | --- | --- |
@@ -294,10 +304,10 @@ Connection members. Android, iOS and macOS unless noted:
 | `readDescriptor({...})` | `Uint8List` | Reads a descriptor |
 | `writeDescriptor({...})` | `void` | Writes one |
 | `requestMtu({address, mtu})` | `int` | The negotiated MTU |
-| `readRssi(address)` | `int` | Signal strength of the connection |
-| `createBond(address)` | `void` | Starts pairing. Android only |
-| `removeBond(address)` | `void` | Removes the pairing. Android only |
-| `getBondState(address)` | `BondState` | Whether this device is paired. Android only |
+| `readRssi(address)` | `int` | Signal strength of the connection. Not on Windows |
+| `createBond(address)` | `void` | Starts pairing. Android, Windows |
+| `removeBond(address)` | `void` | Removes the pairing. Android, Windows |
+| `getBondState(address)` | `BondState` | Whether this device is paired. Android, Windows |
 | `requestConnectionPriority({address, priority})` | `void` | Asks for a connection interval. Android only |
 | `readPhy(address)` | `(tx, rx)` of `GattPhy` | The PHY in use. Android only |
 | `setPreferredPhy({address, txPhy, rxPhy, phyOption})` | `void` | Asks to change it. Android only |

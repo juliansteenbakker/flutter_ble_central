@@ -85,7 +85,7 @@ await ble.writeCharacteristic(
 | Android | yes | yes |
 | iOS | yes | yes |
 | macOS | yes | yes |
-| Windows | yes | not yet |
+| Windows | yes | yes |
 
-Pairing, connection priority, PHY control and reliable write are Android only, since
-CoreBluetooth exposes none of them.
+What each platform supports beyond the basics differs; see the table in the package
+README.

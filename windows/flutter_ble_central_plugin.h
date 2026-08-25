@@ -20,8 +20,12 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/standard_message_codec.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
@@ -95,6 +99,59 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   winrt::fire_and_forget EnableBluetoothAsync(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // GATT client
+  //
+  // Windows has no explicit connect: a link comes up when the services of a
+  // device are asked for, and is held for as long as the BluetoothLEDevice is
+  // alive. So connect() resolves the device and discovers, and disconnect()
+  // drops the reference.
+
+  using Result = std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>;
+
+  // What a connected device holds on to. The session is only kept for the MTU.
+  struct Connection {
+    BluetoothLEDevice device{ nullptr };
+    GattSession session{ nullptr };
+    winrt::event_token connection_changed_token;
+    std::map<std::string, winrt::event_token> value_changed_tokens;
+  };
+
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> connection_state_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> characteristic_value_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> bond_state_sink_;
+
+  std::map<uint64_t, Connection> connections_;
+
+  winrt::fire_and_forget ConnectAsync(uint64_t address, Result result);
+  void Disconnect(uint64_t address);
+  winrt::fire_and_forget DiscoverServicesAsync(uint64_t address, Result result);
+  winrt::fire_and_forget ReadCharacteristicAsync(
+      uint64_t address, std::string service, std::string characteristic, Result result);
+  winrt::fire_and_forget WriteCharacteristicAsync(
+      uint64_t address, std::string service, std::string characteristic,
+      std::vector<uint8_t> value, bool without_response, Result result);
+  winrt::fire_and_forget SetNotifyAsync(
+      uint64_t address, std::string service, std::string characteristic,
+      bool enable, Result result);
+  winrt::fire_and_forget ReadDescriptorAsync(
+      uint64_t address, std::string service, std::string characteristic,
+      std::string descriptor, Result result);
+  winrt::fire_and_forget WriteDescriptorAsync(
+      uint64_t address, std::string service, std::string characteristic,
+      std::string descriptor, std::vector<uint8_t> value, Result result);
+  winrt::fire_and_forget PairAsync(uint64_t address, bool pair, Result result);
+
+  // Reports the link state on the connection_state channel.
+  void PublishConnectionState(uint64_t address, int state);
+
+  // The characteristic named, or nullptr with the error already reported.
+  IAsyncOperation<GattCharacteristic> FindCharacteristic(
+      uint64_t address, std::string service, std::string characteristic);
+
+  // Cleared when the plugin is destroyed, so a coroutine resuming afterwards
+  // does not touch it.
+  std::shared_ptr<std::atomic_bool> alive_ = std::make_shared<std::atomic_bool>(true);
 };
 
 }  // namespace flutter_ble_central
