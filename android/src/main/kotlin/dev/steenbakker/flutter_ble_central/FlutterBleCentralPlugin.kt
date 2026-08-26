@@ -28,7 +28,7 @@ import dev.steenbakker.flutter_ble_central.handlers.ScanErrorHandler
 import dev.steenbakker.flutter_ble_central.handlers.ScanResultHandler
 import dev.steenbakker.flutter_ble_central.handlers.StateChangedHandler
 import dev.steenbakker.flutter_ble_central.models.CentralState
-import dev.steenbakker.flutter_ble_central.models.FlutterBleCentralState
+import dev.steenbakker.flutter_ble_central.models.CentralBluetoothState
 import dev.steenbakker.flutter_ble_central.GattConnectionManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -234,7 +234,7 @@ class FlutterBleCentralPlugin :
 
   private fun handleStart(call: MethodCall, result: Result) {
     if (flutterBleCentralManager == null) {
-      safeResult(result) { result.success(FlutterBleCentralState.Unsupported.ordinal) }
+      safeResult(result) { result.success(CentralBluetoothState.Unsupported.ordinal) }
       return
     }
 
@@ -308,7 +308,7 @@ class FlutterBleCentralPlugin :
       scheduleScanRefresh()
 
       safeResult(result) {
-        result.success(FlutterBleCentralState.Ready.ordinal)
+        result.success(CentralBluetoothState.Ready.ordinal)
       }
     } catch (e: Exception) {
       safeResult(result) {
@@ -383,7 +383,7 @@ class FlutterBleCentralPlugin :
     currentScanSettings = null
 
     safeResult(result) {
-      result.success(FlutterBleCentralState.Ready.ordinal)
+      result.success(CentralBluetoothState.Ready.ordinal)
     }
   }
 
@@ -1356,15 +1356,15 @@ class FlutterBleCentralPlugin :
       val resultState = when {
         hasAllPermissions -> {
           flutterBleCentralManager?.setPermissionGranted(activity, true)
-          FlutterBleCentralState.Granted
+          CentralBluetoothState.Granted
         }
         shouldShowRationale -> {
           flutterBleCentralManager?.setPermissionGranted(activity, false)
-          FlutterBleCentralState.Denied
+          CentralBluetoothState.Denied
         }
         else -> {
           flutterBleCentralManager?.setPermissionGranted(activity, false)
-          FlutterBleCentralState.PermanentlyDenied
+          CentralBluetoothState.PermanentlyDenied
         }
       }
 
@@ -1394,7 +1394,7 @@ class FlutterBleCentralPlugin :
 
   override fun onDetachedFromActivity() {
     cancelScanRefresh()
-    flutterBleCentralManager?.permissionResultCallback?.invoke(FlutterBleCentralState.Denied)
+    flutterBleCentralManager?.permissionResultCallback?.invoke(CentralBluetoothState.Denied)
     flutterBleCentralManager?.permissionResultCallback = null
     // Unregister lifecycle callbacks
     activityBinding?.activity?.application?.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)

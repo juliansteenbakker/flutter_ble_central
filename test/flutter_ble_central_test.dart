@@ -73,7 +73,7 @@ void main() {
         final arguments = calls.single.arguments as Map<Object?, Object?>;
         expect(arguments['scanMode'], 2);
         expect(arguments['enableTimingStats'], true);
-        expect(state, BluetoothCentralState.ready);
+        expect(state, CentralBluetoothState.ready);
       },
       skip: Platform.isWindows,
     );
@@ -88,7 +88,7 @@ void main() {
         final arguments = calls.single.arguments as Map<Object?, Object?>;
         expect(arguments['scanMode'], isNull);
         expect(arguments['enableTimingStats'], false);
-        expect(state, BluetoothCentralState.granted);
+        expect(state, CentralBluetoothState.granted);
       },
       skip: Platform.isWindows,
     );
@@ -96,7 +96,7 @@ void main() {
     test(
       'maps a null response to unknown',
       () async {
-        expect(await ble.start(), BluetoothCentralState.unknown);
+        expect(await ble.start(), CentralBluetoothState.unknown);
       },
       skip: Platform.isWindows,
     );
@@ -107,7 +107,7 @@ void main() {
       'maps the response to a state',
       () async {
         response = 5;
-        expect(await ble.stop(), BluetoothCentralState.turnedOff);
+        expect(await ble.stop(), CentralBluetoothState.turnedOff);
         expect(calls.single.method, 'stop');
       },
       skip: Platform.isWindows,
@@ -116,7 +116,7 @@ void main() {
     test(
       'maps a null response to unknown',
       () async {
-        expect(await ble.stop(), BluetoothCentralState.unknown);
+        expect(await ble.stop(), CentralBluetoothState.unknown);
       },
       skip: Platform.isWindows,
     );
@@ -161,11 +161,11 @@ void main() {
       response = 2;
       expect(
         await ble.requestPermission(),
-        BluetoothCentralState.permanentlyDenied,
+        CentralBluetoothState.permanentlyDenied,
       );
 
       response = 1;
-      expect(await ble.hasPermission(), BluetoothCentralState.denied);
+      expect(await ble.hasPermission(), CentralBluetoothState.denied);
 
       expect(
         calls.map((c) => c.method),
@@ -174,8 +174,8 @@ void main() {
     });
 
     test('map a null response to unknown', () async {
-      expect(await ble.requestPermission(), BluetoothCentralState.unknown);
-      expect(await ble.hasPermission(), BluetoothCentralState.unknown);
+      expect(await ble.requestPermission(), CentralBluetoothState.unknown);
+      expect(await ble.hasPermission(), CentralBluetoothState.unknown);
     });
   });
 
@@ -349,7 +349,7 @@ void main() {
     test(
       'start reports ready and maps an unsupported adapter',
       () async {
-        expect(await ble.start(), BluetoothCentralState.ready);
+        expect(await ble.start(), CentralBluetoothState.ready);
         expect(calls.single.method, 'start');
 
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -357,7 +357,7 @@ void main() {
           throw PlatformException(code: 'unsupported');
         });
 
-        expect(await ble.start(), BluetoothCentralState.unsupported);
+        expect(await ble.start(), CentralBluetoothState.unsupported);
       },
       skip: !Platform.isWindows,
     );
@@ -370,7 +370,7 @@ void main() {
           throw PlatformException(code: 'error');
         });
 
-        expect(await ble.start(), BluetoothCentralState.turnedOff);
+        expect(await ble.start(), CentralBluetoothState.turnedOff);
       },
       skip: !Platform.isWindows,
     );
@@ -378,7 +378,7 @@ void main() {
     test(
       'stop reports ready',
       () async {
-        expect(await ble.stop(), BluetoothCentralState.ready);
+        expect(await ble.stop(), CentralBluetoothState.ready);
         expect(calls.single.method, 'stop');
       },
       skip: !Platform.isWindows,

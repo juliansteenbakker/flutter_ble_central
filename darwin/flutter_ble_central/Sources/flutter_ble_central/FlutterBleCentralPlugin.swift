@@ -116,7 +116,7 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    // Returns permission state ordinal matching FlutterBleBluetoothState enum
+    // Returns permission state ordinal matching CentralBluetoothState enum
     // Note: This checks PERMISSION status only, not Bluetooth power state (use isBluetoothOn for that)
     private func getPermissionState() -> Int {
         // First try the authorization API (iOS 13.1+/macOS 10.15+)
@@ -124,13 +124,13 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
         if #available(iOS 13.1, macOS 10.15, *) {
             switch CBCentralManager.authorization {
             case .allowedAlways:
-                return FlutterBleBluetoothState.Granted.rawValue
+                return CentralBluetoothState.Granted.rawValue
             case .denied:
-                return FlutterBleBluetoothState.PermanentlyDenied.rawValue
+                return CentralBluetoothState.PermanentlyDenied.rawValue
             case .restricted:
-                return FlutterBleBluetoothState.Restricted.rawValue
+                return CentralBluetoothState.Restricted.rawValue
             case .notDetermined:
-                return FlutterBleBluetoothState.Denied.rawValue
+                return CentralBluetoothState.Denied.rawValue
             @unknown default:
                 break // fall through to state-based check
             }
@@ -179,7 +179,7 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
         // Only start scanning if Bluetooth is ready
         if state == .Ready || state == .Granted {
             flutterBleCentralManager.startScan(with: nil)
-            result(FlutterBleBluetoothState.Ready.rawValue)
+            result(CentralBluetoothState.Ready.rawValue)
         } else {
             // Return the error state (TurnedOff, Denied, Unsupported, etc.)
             result(state.rawValue)
@@ -208,6 +208,6 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
      */
     private func stopScan(_ result: @escaping FlutterResult) {
         flutterBleCentralManager.stopScan()
-        result(FlutterBleBluetoothState.Ready.rawValue)
+        result(CentralBluetoothState.Ready.rawValue)
     }
 }

@@ -95,24 +95,24 @@ final ble = FlutterBleCentral();
 
 ### Permissions and adapter state
 
-Every permission call returns a `BluetoothCentralState`, which covers both the
+Every permission call returns a `CentralBluetoothState`, which covers both the
 permission result and the state of the adapter.
 
 ```dart
 if (!await ble.isSupported) return;
 
 var state = await ble.hasPermission();
-if (state != BluetoothCentralState.granted) {
+if (state != CentralBluetoothState.granted) {
   state = await ble.requestPermission();
 }
 
 switch (state) {
-  case BluetoothCentralState.granted:
-  case BluetoothCentralState.ready:
+  case CentralBluetoothState.granted:
+  case CentralBluetoothState.ready:
     break;
-  case BluetoothCentralState.turnedOff:
+  case CentralBluetoothState.turnedOff:
     await ble.enableBluetooth();       // Android and Windows only
-  case BluetoothCentralState.permanentlyDenied:
+  case CentralBluetoothState.permanentlyDenied:
     await ble.openAppSettings();
   default:
     return;
@@ -149,7 +149,7 @@ await ble.stop();
 await subscription.cancel();
 ```
 
-`start` returns a `BluetoothCentralState`, so a scan that could not be started because
+`start` returns a `CentralBluetoothState`, so a scan that could not be started because
 Bluetooth is off or unsupported is reported rather than thrown.
 
 ### Scan settings
@@ -249,7 +249,7 @@ controller agreed on. PHY control needs Android 8.0.
 | `onScanResult` | `ScanResult` | all |
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
-| `onPeripheralStateChanged` | `CentralState` | all |
+| `onCentralStateChanged` | `CentralState` | all |
 | `onConnectionStateChanged` | `ConnectionStateChange` | Android only |
 | `onCharacteristicValueChanged` | `CharacteristicValue` | Android only |
 | `onBondStateChanged` | `BondStateChange` | Android only |
@@ -258,12 +258,12 @@ controller agreed on. PHY control needs Android 8.0.
 
 | Member | Returns | Description |
 | --- | --- | --- |
-| `start({scanSettings})` | `BluetoothCentralState` | Starts scanning |
-| `stop()` | `BluetoothCentralState` | Stops scanning |
+| `start({scanSettings})` | `CentralBluetoothState` | Starts scanning |
+| `stop()` | `CentralBluetoothState` | Stops scanning |
 | `isSupported` | `bool` | Whether BLE is available on this device |
 | `isBluetoothOn` | `bool` | Whether the adapter is powered on |
-| `hasPermission()` | `BluetoothCentralState` | Current permission and adapter state |
-| `requestPermission()` | `BluetoothCentralState` | Prompts for the required permissions |
+| `hasPermission()` | `CentralBluetoothState` | Current permission and adapter state |
+| `requestPermission()` | `CentralBluetoothState` | Prompts for the required permissions |
 | `enableBluetooth({askUser})` | `bool` | Turns the adapter on (Android and Windows) |
 | `openBluetoothSettings()` | `void` | Opens the system Bluetooth settings |
 | `openAppSettings()` | `void` | Opens this app's settings page |

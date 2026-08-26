@@ -115,7 +115,7 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the current authorization status.
      */
-    var permissionState: FlutterBleBluetoothState {
+    var permissionState: CentralBluetoothState {
         if #available(iOS 13.1, macOS 10.15, *) {
             switch CBCentralManager.authorization {
             case .allowedAlways:
@@ -161,7 +161,7 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the current adapter state.
      */
-    var bluetoothState: FlutterBleBluetoothState {
+    var bluetoothState: CentralBluetoothState {
         switch centralManager.state {
         case .poweredOn:
             return .Ready
@@ -189,7 +189,7 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the overall readiness state.
      */
-    func getCombinedState() -> FlutterBleBluetoothState {
+    func getCombinedState() -> CentralBluetoothState {
         // First check permissions
         let permState = permissionState
         if permState != .Granted {
@@ -205,7 +205,7 @@ final class FlutterBleCentralManager {
 
      - Parameter completion: Called with the resulting `CentralState`.
      */
-    func requestPermission(completion: @escaping (FlutterBleBluetoothState) -> Void) {
+    func requestPermission(completion: @escaping (CentralBluetoothState) -> Void) {
         switch permissionState {
         case .Denied:
             // Trigger the system dialog if status is notDetermined

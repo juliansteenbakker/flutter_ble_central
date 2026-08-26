@@ -10,8 +10,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
 import 'package:flutter_ble_central/src/models/enums/bond_state.dart';
+import 'package:flutter_ble_central/src/models/enums/central_bluetooth_state.dart';
 import 'package:flutter_ble_central/src/models/enums/central_state.dart';
 import 'package:flutter_ble_central/src/models/enums/connection_priority.dart';
 import 'package:flutter_ble_central/src/models/enums/gatt_connection_state.dart';
@@ -90,7 +90,7 @@ class FlutterBleCentral {
   Stream<BondStateChange>? _bondState;
 
   /// Start scanning. Takes [ScanSettings] as an input.
-  Future<BluetoothCentralState> start({ScanSettings? scanSettings}) async {
+  Future<CentralBluetoothState> start({ScanSettings? scanSettings}) async {
     final settings = (scanSettings ?? ScanSettings()).toJson();
     settings['enableTimingStats'] = enableTimingStats;
 
@@ -98,28 +98,28 @@ class FlutterBleCentral {
       try {
         await _methodChannel.invokeMethod('start', settings);
       } on PlatformException catch (e) {
-        if (e.code == 'unsupported') return BluetoothCentralState.unsupported;
+        if (e.code == 'unsupported') return CentralBluetoothState.unsupported;
         debugPrint('$tag platform exception: $e');
-        return BluetoothCentralState.turnedOff;
+        return CentralBluetoothState.turnedOff;
       }
-      return BluetoothCentralState.ready;
+      return CentralBluetoothState.ready;
     }
     final response = await _methodChannel.invokeMethod<int>('start', settings);
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Stop advertising
-  Future<BluetoothCentralState> stop() async {
+  Future<CentralBluetoothState> stop() async {
     if (Platform.isWindows) {
       await _methodChannel.invokeMethod<bool>('stop');
-      return BluetoothCentralState.ready;
+      return CentralBluetoothState.ready;
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Returns `true` if advertising over BLE is supported
@@ -140,21 +140,21 @@ class FlutterBleCentral {
   }
 
   /// Request Bluetooth permissions
-  Future<BluetoothCentralState> requestPermission() async {
+  Future<CentralBluetoothState> requestPermission() async {
     final response = await _methodChannel.invokeMethod<int>(
       'requestPermission',
     );
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Check if Bluetooth permissions are granted
-  Future<BluetoothCentralState> hasPermission() async {
+  Future<CentralBluetoothState> hasPermission() async {
     final response = await _methodChannel.invokeMethod<int>('hasPermission');
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Open Bluetooth settings
@@ -194,7 +194,7 @@ class FlutterBleCentral {
   ///
   /// After listening to this Stream,
   /// you'll be notified about changes in peripheral state.
-  Stream<CentralState> get onPeripheralStateChanged {
+  Stream<CentralState> get onCentralStateChanged {
     _centralState ??= _stateChangedEventChannel.receiveBroadcastStream().map(
           (dynamic event) => CentralState.values[event as int],
         );
