@@ -1,16 +1,90 @@
-# flutter_ble_central_example
+# Flutter BLE Central Example
 
-Demonstrates how to use the flutter_ble_central plugin.
+Scans for BLE peripherals, connects to one, and exchanges bytes with it over a
+GATT service.
 
-## Getting Started
+It is the central half of a pair. The other half is the example in
+[flutter_ble_peripheral](https://github.com/juliansteenbakker/flutter_ble_peripheral);
+see [Running the pair](#running-the-pair) below.
 
-This project is a starting point for a Flutter application.
+## Using it
 
-A few resources to get you started if this is your first Flutter project:
+1. **Permissions** — the app asks on launch, and the Permissions section can ask
+   again. Android needs the Bluetooth and location permissions.
+2. **Scan** — press Start. Devices appear as they are found, with their name,
+   address and RSSI.
+3. **Connect** — tap a device. The app connects, discovers its services, finds
+   the TX/RX pair and subscribes to TX.
+4. **Send** — enter hex bytes such as `01 02 03` and press Write to RX.
+5. **Receive** — anything the peripheral notifies on TX appears below, most
+   recent first.
 
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
+Press Disconnect to drop the link and scan again.
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## What it looks for
+
+| | Value |
+| --- | --- |
+| Service | `bf27730d-860a-4e09-889c-2d8b6a9e0fe7` |
+| TX, notify | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` |
+| RX, write | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` |
+
+These are what the `flutter_ble_peripheral` example serves, exported there as
+`defaultTxCharacteristicUuid` and `defaultRxCharacteristicUuid`. They are the
+Nordic UART Service characteristics.
+
+The characteristics are looked up by uuid first and, failing that, by property:
+whichever one notifies is treated as TX and whichever one accepts writes as RX.
+So a peripheral serving its own layout under the same service still works.
+
+## Running the pair
+
+You need two devices; a phone and a Mac both work, and BLE does not work in a
+simulator.
+
+1. Run the `flutter_ble_peripheral` example on the first device and press Start.
+2. Run this example on the second device and press Start.
+3. Tap `Flutter BLE` in the list. The app connects and subscribes.
+4. On the peripheral, the state chip turns to `connected` and its Send button
+   becomes enabled.
+5. Send bytes from either side; they appear on the other.
+
+Both examples default to the same service UUID, so they find each other without
+any configuration. Change it in one and you have to change it in the other.
+
+## In code
+
+```dart
+await ble.connect(address: address);
+
+final services = await ble.discoverServices(address);
+
+await ble.setCharacteristicNotification(
+  address: address,
+  serviceUuid: serviceUuid,
+  characteristicUuid: txUuid,
+  enable: true,
+);
+
+ble.onCharacteristicValueChanged.listen((event) {
+  // The peripheral notified on a characteristic.
+});
+
+await ble.writeCharacteristic(
+  address: address,
+  serviceUuid: serviceUuid,
+  characteristicUuid: rxUuid,
+  value: Uint8List.fromList([1, 2, 3]),
+);
+```
+
+## Platform support
+
+| | Scanning | Connecting |
+| --- | --- | --- |
+| Android | yes | yes |
+| iOS | yes | not yet |
+| macOS | yes | not yet |
+| Windows | yes | not yet |
+
+Connecting is Android only for now; see `GATT_PLAN.md` in the repository root.
