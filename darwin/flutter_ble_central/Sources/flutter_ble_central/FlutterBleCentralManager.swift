@@ -43,6 +43,10 @@ final class FlutterBleCentralManager {
     /// Map of discovered peripherals by their `UUID`.
     private(set) var activePeripherals = [PeripheralID: CBPeripheral]()
 
+    /// Serves the GATT client half: connections, discovery, reads and writes.
+    /// Built in `init`, after the central manager it works through.
+    private(set) var gatt: GattConnectionManager!
+
     /// Queue CoreBluetooth delivers its callbacks on.
     ///
     /// Deliberately not the main queue: with duplicates allowed, every advertising
@@ -60,10 +64,14 @@ final class FlutterBleCentralManager {
      - Parameters:
        - scanResultHandler: Handler that publishes scan results to Flutter.
        - stateChangedHandler: Handler that publishes state changes to Flutter.
+       - connectionStateHandler: Handler that publishes connection state changes.
+       - characteristicValueHandler: Handler that publishes notified values.
      */
     init(
         scanResultHandler: ScanResultHandler,
-        stateChangedHandler: StateChangedHandler
+        stateChangedHandler: StateChangedHandler,
+        connectionStateHandler: ConnectionEventHandler,
+        characteristicValueHandler: ConnectionEventHandler
     ) {
         self.centralManagerDelegate = CentralManagerDelegate(
             onStateChange: { state in
@@ -82,6 +90,25 @@ final class FlutterBleCentralManager {
             delegate: self.centralManagerDelegate,
             queue: callbackQueue
         )
+
+        // Built after the central manager, since it needs it, and wired into the
+        // delegate afterwards for the same reason. Each of these arrives on
+        // `callbackQueue`, which is where the GATT manager keeps its state.
+        self.gatt = GattConnectionManager(
+            centralManager: centralManager,
+            queue: callbackQueue,
+            connectionStateHandler: connectionStateHandler,
+            characteristicValueHandler: characteristicValueHandler
+        )
+        centralManagerDelegate.onConnect = { [weak self] peripheral, _ in
+            self?.gatt.handleDidConnect(peripheral)
+        }
+        centralManagerDelegate.onConnectFailed = { [weak self] peripheral, error in
+            self?.gatt.handleDidFailToConnect(peripheral, error: error)
+        }
+        centralManagerDelegate.onDisconnect = { [weak self] peripheral, error in
+            self?.gatt.handleDidDisconnect(peripheral, error: error)
+        }
     }
 
     /**

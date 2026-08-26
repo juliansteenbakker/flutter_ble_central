@@ -222,7 +222,8 @@ class FlutterBleCentral {
   /// Returns a Stream of pairing state changes.
   ///
   /// Emits whenever this device starts pairing with a peripheral, finishes, or
-  /// loses the pairing. Android and Windows.
+  /// loses the pairing. Android and Windows; Core Bluetooth has no pairing API,
+  /// so nothing is ever published here on Apple.
   Stream<BondStateChange> get onBondStateChanged {
     _bondState ??= _bondStateEventChannel.receiveBroadcastStream().map(
           (dynamic event) =>
@@ -430,8 +431,8 @@ class FlutterBleCentral {
   /// [mtu] The requested MTU size
   /// Returns the negotiated MTU size
   ///
-  /// On Windows [mtu] is ignored: the radio negotiates the size itself, and the
-  /// one it settled on is what comes back.
+  /// On Apple and Windows [mtu] is ignored: the radio negotiates the size
+  /// itself, and the one it settled on is what comes back.
   Future<int> requestMtu({
     required String address,
     required int mtu,
@@ -448,7 +449,7 @@ class FlutterBleCentral {
 
   /// Read the RSSI of a connected device.
   ///
-  /// Android only; Windows throws a [PlatformException] with code
+  /// Android and Apple; Windows throws a [PlatformException] with code
   /// `unsupported`.
   ///
   /// [address] The device address
@@ -470,7 +471,9 @@ class FlutterBleCentral {
   ///
   /// Android and Windows. Windows accepts only the ceremony that needs no
   /// passkey; one that asks for anything else is refused, and the refusal
-  /// arrives on [onBondStateChanged] as [BondState.none].
+  /// arrives on [onBondStateChanged] as [BondState.none]. Apple throws a
+  /// [PlatformException] with code `unsupported`; Core Bluetooth pairs on its
+  /// own when a peripheral asks for it.
   Future<void> createBond(String address) async {
     await _methodChannel.invokeMethod('createBond', {'address': address});
   }
@@ -478,13 +481,14 @@ class FlutterBleCentral {
   /// Removes the pairing with a peripheral.
   ///
   /// Android and Windows. On Android it uses a hidden platform API, so it may
-  /// fail on some devices.
+  /// fail on some devices. Apple throws a [PlatformException] with code
+  /// `unsupported`.
   Future<void> removeBond(String address) async {
     await _methodChannel.invokeMethod('removeBond', {'address': address});
   }
 
-  /// Whether this device is paired with a peripheral. Android only; Windows
-  /// throws a [PlatformException] with code `unsupported`.
+  /// Whether this device is paired with a peripheral. Android only; Apple and
+  /// Windows throw a [PlatformException] with code `unsupported`.
   Future<BondState> getBondState(String address) async {
     final response = await _methodChannel.invokeMethod<int>(
       'getBondState',
@@ -498,8 +502,8 @@ class FlutterBleCentral {
   /// Asks for a connection interval suited to [priority].
   ///
   /// A shorter interval means lower latency and higher throughput at the cost
-  /// of power. The peripheral has the final say. Android only; Windows throws a
-  /// [PlatformException] with code `unsupported`.
+  /// of power. The peripheral has the final say. Android only; Apple and
+  /// Windows throw a [PlatformException] with code `unsupported`.
   Future<void> requestConnectionPriority({
     required String address,
     required ConnectionPriority priority,
@@ -550,8 +554,8 @@ class FlutterBleCentral {
   ///
   /// Writes made after this are queued on the peripheral and echoed back for
   /// verification rather than applied, until [executeReliableWrite] commits
-  /// them or [abortReliableWrite] drops them. Android only; Windows throws a
-  /// [PlatformException] with code `unsupported`.
+  /// them or [abortReliableWrite] drops them. Android only; Apple and Windows
+  /// throw a [PlatformException] with code `unsupported`.
   Future<void> beginReliableWrite(String address) async {
     await _methodChannel.invokeMethod(
       'beginReliableWrite',
@@ -559,8 +563,8 @@ class FlutterBleCentral {
     );
   }
 
-  /// Commits the writes queued since [beginReliableWrite]. Android only;
-  /// Windows throws a [PlatformException] with code `unsupported`.
+  /// Commits the writes queued since [beginReliableWrite]. Android only; Apple
+  /// and Windows throw a [PlatformException] with code `unsupported`.
   Future<void> executeReliableWrite(String address) async {
     await _methodChannel.invokeMethod(
       'executeReliableWrite',
@@ -568,8 +572,8 @@ class FlutterBleCentral {
     );
   }
 
-  /// Drops the writes queued since [beginReliableWrite]. Android only; Windows
-  /// throws a [PlatformException] with code `unsupported`.
+  /// Drops the writes queued since [beginReliableWrite]. Android only; Apple
+  /// and Windows throw a [PlatformException] with code `unsupported`.
   Future<void> abortReliableWrite(String address) async {
     await _methodChannel.invokeMethod(
       'abortReliableWrite',
