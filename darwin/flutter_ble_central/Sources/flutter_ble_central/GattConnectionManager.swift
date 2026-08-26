@@ -243,10 +243,14 @@ final class GattConnectionManager: NSObject {
             }
             let identifier = peripheral.identifier
 
-            if let existing = self.connections[identifier],
-               existing.peripheral.state == .connected {
-                self.fail(result, "CONNECTION_ERROR", "Already connected to device")
-                return
+            if let existing = self.connections[identifier] {
+                if existing.peripheral.state == .connected {
+                    self.fail(result, "CONNECTION_ERROR", "Already connected to device")
+                    return
+                }
+                // An attempt that has not landed yet is replaced, so its timer
+                // has to go with it or it would cancel the one taking over.
+                existing.timeout?.cancel()
             }
 
             let connection = Connection(peripheral: peripheral)
@@ -254,7 +258,7 @@ final class GattConnectionManager: NSObject {
             self.connections[identifier] = connection
 
             // Core Bluetooth never gives up on its own, so the timeout Dart asked
-            // for is kept here.
+            // for is kept here. Dart counts it in seconds, as Android does.
             if timeout > 0 {
                 let work = DispatchWorkItem { [weak self] in
                     guard let self = self else { return }
@@ -262,12 +266,14 @@ final class GattConnectionManager: NSObject {
                           current.peripheral.state != .connected else { return }
                     self.centralManager.cancelPeripheralConnection(current.peripheral)
                     self.publishState(current, .disconnected)
-                    self.connections.removeValue(forKey: identifier)
+                    // Answered before the connection is dropped, since that is
+                    // where a discovery still in flight is parked.
                     self.failOutstanding(identifier, "The connection timed out")
+                    self.connections.removeValue(forKey: identifier)
                 }
                 connection.timeout = work
                 self.queue.asyncAfter(
-                    deadline: .now() + .milliseconds(timeout), execute: work
+                    deadline: .now() + .seconds(timeout), execute: work
                 )
             }
 
@@ -289,8 +295,19 @@ final class GattConnectionManager: NSObject {
                 return
             }
             connection.timeout?.cancel()
-            self.publishState(connection, .disconnecting)
+            connection.timeout = nil
             self.centralManager.cancelPeripheralConnection(connection.peripheral)
+
+            // Core Bluetooth reports nothing back for an attempt that is
+            // cancelled before it lands, so that one is torn down here rather
+            // than waited on.
+            if connection.peripheral.state == .connected {
+                self.publishState(connection, .disconnecting)
+            } else {
+                self.publishState(connection, .disconnected)
+                self.failOutstanding(identifier, "The connection was cancelled")
+                self.connections.removeValue(forKey: identifier)
+            }
             self.reply(result, nil)
         }
     }
@@ -577,6 +594,16 @@ final class GattConnectionManager: NSObject {
                 self.fail(result, "WRITE_DESCRIPTOR_ERROR", "Descriptor not found")
                 return
             }
+            // Core Bluetooth raises rather than answering when the client
+            // configuration descriptor is written by hand.
+            guard descriptor.uuid.uuidString.caseInsensitiveCompare(
+                CBUUIDClientCharacteristicConfigurationString
+            ) != .orderedSame else {
+                self.fail(result, "WRITE_DESCRIPTOR_ERROR",
+                          "Use setCharacteristicNotification to write the client "
+                          + "characteristic configuration descriptor")
+                return
+            }
             let key = OperationKey(
                 identifier, serviceUuid, characteristicUuid, descriptorUuid
             )
@@ -599,18 +626,18 @@ final class GattConnectionManager: NSObject {
         guard let connection = connections[peripheral.identifier] else { return }
         connection.timeout?.cancel()
         publishState(connection, .disconnected)
-        connections.removeValue(forKey: peripheral.identifier)
         failOutstanding(peripheral.identifier,
                         error?.localizedDescription ?? "The connection failed")
+        connections.removeValue(forKey: peripheral.identifier)
     }
 
     func handleDidDisconnect(_ peripheral: CBPeripheral, error: Error?) {
         guard let connection = connections[peripheral.identifier] else { return }
         connection.timeout?.cancel()
         publishState(connection, .disconnected)
-        connections.removeValue(forKey: peripheral.identifier)
         failOutstanding(peripheral.identifier,
                         error?.localizedDescription ?? "The peripheral disconnected")
+        connections.removeValue(forKey: peripheral.identifier)
     }
 
     // Nothing tears the connections down by hand. Unlike WinRT, Core Bluetooth
