@@ -10,12 +10,12 @@ Scan for Bluetooth Low Energy devices from Flutter. This plugin puts the device 
 as `ScanResult`s. For the other direction, see
 [flutter_ble_peripheral](https://pub.dev/packages/flutter_ble_peripheral).
 
-| Platform | Minimum version | Notes |
-| --- | --- | --- |
-| Android | API 21 | Full `ScanSettings` support |
-| iOS | 13.0 | Scan settings are ignored by CoreBluetooth |
-| macOS | 10.14 | Scan settings are ignored by CoreBluetooth |
-| Windows | Windows 10 | Scan settings are ignored |
+| Platform | Minimum version | Scanning | Connecting |
+| --- | --- | --- | --- |
+| Android | API 21 | Full `ScanSettings` support | yes |
+| iOS | 13.0 | Scan settings are ignored by CoreBluetooth | not yet |
+| macOS | 10.14 | Scan settings are ignored by CoreBluetooth | not yet |
+| Windows | Windows 10 | Scan settings are ignored | yes, with the [differences below](#connecting) |
 
 ## Installation
 
@@ -177,8 +177,8 @@ advertisement when scanning in a busy environment.
 
 ### Connecting
 
-Android only for now. Connect to a device found by scanning, discover what it serves,
-then read, write or subscribe.
+Android and Windows. Connect to a device found by scanning, discover what it serves,
+then read, write or subscribe. Apple has no connection support yet.
 
 ```dart
 await ble.connect(address: address);
@@ -212,6 +212,24 @@ discovering services.
 
 Also available: `readCharacteristic`, `readDescriptor`, `writeDescriptor`,
 `getConnectionState`, `requestMtu` and `readRssi`.
+
+Windows differs in a few places, because WinRT does not expose the same controls:
+
+- There is no explicit connect. `connect` resolves the peripheral and asks the
+  radio to hold the link open, so it reports `connecting` and the link comes up
+  when the first read or discovery goes out. Wait for `onConnectionStateChanged`
+  the same way as on Android.
+- `discoverServices` has to run before a read, a write or a subscription. Windows
+  hands back the characteristic objects as part of discovery, and there is nothing
+  to address without them.
+- `requestMtu` reports the MTU the connection already negotiated; the size asked
+  for is ignored, since Windows negotiates it itself.
+- `readRssi`, `readPhy`, `setPreferredPhy`, `requestConnectionPriority`,
+  `getBondState` and the reliable write trio throw a `PlatformException` with code
+  `unsupported`. None of them has a WinRT equivalent.
+- `createBond` accepts only the pairing ceremony that needs no passkey, which
+  covers most peripherals. One that asks for a passkey or a numeric comparison is
+  refused, and the refusal arrives on `onBondStateChanged` as `none`.
 
 ### Pairing, PHY and reliable write
 
@@ -250,9 +268,9 @@ controller agreed on. PHY control needs Android 8.0.
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
 | `onCentralStateChanged` | `CentralState` | all |
-| `onConnectionStateChanged` | `ConnectionStateChange` | Android only |
-| `onCharacteristicValueChanged` | `CharacteristicValue` | Android only |
-| `onBondStateChanged` | `BondStateChange` | Android only |
+| `onConnectionStateChanged` | `ConnectionStateChange` | Android and Windows |
+| `onCharacteristicValueChanged` | `CharacteristicValue` | Android and Windows |
+| `onBondStateChanged` | `BondStateChange` | Android and Windows |
 
 ## API
 
@@ -269,7 +287,8 @@ controller agreed on. PHY control needs Android 8.0.
 | `openAppSettings()` | `void` | Opens this app's settings page |
 | `enableTimingStats` | `bool` field | Logs native timing information per scan result |
 
-Connection members, Android only:
+Connection members. Android serves all of them. Windows serves everything down to
+`removeBond` and throws `unsupported` for the rest. Apple serves none of them yet:
 
 | Member | Returns | Description |
 | --- | --- | --- |
@@ -283,9 +302,9 @@ Connection members, Android only:
 | `readDescriptor({...})` | `Uint8List` | Reads a descriptor |
 | `writeDescriptor({...})` | `void` | Writes one |
 | `requestMtu({address, mtu})` | `int` | The negotiated MTU |
-| `readRssi(address)` | `int` | Signal strength of the connection |
 | `createBond(address)` | `void` | Starts pairing |
 | `removeBond(address)` | `void` | Removes the pairing |
+| `readRssi(address)` | `int` | Signal strength of the connection |
 | `getBondState(address)` | `BondState` | Whether this device is paired |
 | `requestConnectionPriority({address, priority})` | `void` | Asks for a connection interval |
 | `readPhy(address)` | `(tx, rx)` of `GattPhy` | The PHY in use |

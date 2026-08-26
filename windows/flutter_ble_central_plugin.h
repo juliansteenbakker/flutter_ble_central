@@ -20,12 +20,18 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/standard_message_codec.h>
 
+#include "gatt_connection_manager.h"
+
 #include <atomic>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
 
 namespace flutter_ble_central {
 
@@ -71,6 +77,28 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> scan_result_sink_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> state_changed_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> connection_state_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> characteristic_value_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> bond_state_sink_;
+
+  // Serves the GATT client half. Created once the plugin is up, so that it can
+  // be handed the apartment this plugin was registered on.
+  std::unique_ptr<GattConnectionManager> gatt_;
+
+  // Whether a method belongs to the GATT client half.
+  static bool IsConnectionMethod(const std::string& method);
+
+  // Reads what a connection method needs out of the arguments and hands it to
+  // the manager, or answers with an error when Dart sent something unusable.
+  void HandleConnectionMethod(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Reports a method Windows has no way to serve, rather than letting it fall
+  // through to a missing-plugin failure.
+  void ReportUnsupported(
+      const std::string& method,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
   Radio bluetoothRadio{ nullptr };
   winrt::event_token radioStateChangedToken;
