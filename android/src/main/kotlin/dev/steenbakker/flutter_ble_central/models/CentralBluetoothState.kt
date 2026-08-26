@@ -11,9 +11,9 @@ package dev.steenbakker.flutter_ble_central.models
  * for API compatibility across platforms).
  *
  * The ordinal of each entry is what gets sent to Flutter, where it indexes
- * BluetoothCentralState, so the order must stay in sync with that enum.
+ * CentralBluetoothState, so the order must stay in sync with that enum.
  */
-enum class FlutterBleCentralState {
+enum class CentralBluetoothState {
 
     /**
      * The user granted access to the requested feature.

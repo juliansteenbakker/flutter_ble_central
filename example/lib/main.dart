@@ -110,7 +110,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
       if (_isScanning) setState(() {});
     });
 
-    _stateChangedSub = _ble.onPeripheralStateChanged.listen((state) {
+    _stateChangedSub = _ble.onCentralStateChanged.listen((state) {
       setState(() => _centralState = state);
     });
   }
@@ -141,7 +141,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     // Check permissions first (on Apple, we can't determine Bluetooth power
     // state until we have permission - state shows as unauthorized)
     final permission = await _ble.hasPermission();
-    if (permission != BluetoothCentralState.granted && mounted) {
+    if (permission != CentralBluetoothState.granted && mounted) {
       final shouldContinue = await _showPermissionDialog(permission);
       if (shouldContinue != true) return;
     }
@@ -182,7 +182,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
   }
 
   Future<bool?> _showPermissionDialog(
-    BluetoothCentralState initialState,
+    CentralBluetoothState initialState,
   ) async {
     final navigatorContext = _navigatorKey.currentContext;
     if (navigatorContext == null) return false;
@@ -243,26 +243,26 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     final state = await _ble.start();
 
     switch (state) {
-      case BluetoothCentralState.ready:
-      case BluetoothCentralState.granted:
+      case CentralBluetoothState.ready:
+      case CentralBluetoothState.granted:
         setState(() {
           _isScanning = true;
           _devices.clear();
           _packetsFound = 0;
         });
-      case BluetoothCentralState.denied:
+      case CentralBluetoothState.denied:
         _showSnackBar('Bluetooth denied. You can ask again.', isError: true);
-      case BluetoothCentralState.permanentlyDenied:
+      case CentralBluetoothState.permanentlyDenied:
         _showSnackBar('Bluetooth permanently denied.', isError: true);
-      case BluetoothCentralState.turnedOff:
+      case CentralBluetoothState.turnedOff:
         _showSnackBar('Bluetooth turned off.', isError: true);
-      case BluetoothCentralState.unsupported:
+      case CentralBluetoothState.unsupported:
         _showSnackBar('Bluetooth unsupported.', isError: true);
-      case BluetoothCentralState.restricted:
+      case CentralBluetoothState.restricted:
         _showSnackBar('Bluetooth restricted.', isError: true);
-      case BluetoothCentralState.limited:
+      case CentralBluetoothState.limited:
         _showSnackBar('Bluetooth limited.', isError: true);
-      case BluetoothCentralState.unknown:
+      case CentralBluetoothState.unknown:
         _showSnackBar('Bluetooth unavailable.', isError: true);
     }
   }
@@ -541,7 +541,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                         final status = await _ble.hasPermission();
                         _showSnackBar(
                           'Permission: ${status.name}',
-                          isError: status != BluetoothCentralState.granted,
+                          isError: status != CentralBluetoothState.granted,
                         );
                       },
                     ),
@@ -554,7 +554,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                           final status = await _ble.requestPermission();
                           _showSnackBar(
                             'Permission: ${status.name}',
-                            isError: status != BluetoothCentralState.granted,
+                            isError: status != CentralBluetoothState.granted,
                           );
                         },
                       ),
@@ -981,7 +981,7 @@ class _PermissionDialog extends StatefulWidget {
     required this.initialState,
   });
   final VoidCallback onGranted;
-  final BluetoothCentralState initialState;
+  final CentralBluetoothState initialState;
 
   @override
   State<_PermissionDialog> createState() => _PermissionDialogState();
@@ -992,7 +992,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
   final _ble = FlutterBleCentral();
   bool _checkingPermission = false;
   bool _requesting = false;
-  late BluetoothCentralState _permissionState;
+  late CentralBluetoothState _permissionState;
 
   @override
   void initState() {
@@ -1019,7 +1019,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
     _checkingPermission = true;
 
     final result = await _ble.hasPermission();
-    if (result == BluetoothCentralState.granted && mounted) {
+    if (result == CentralBluetoothState.granted && mounted) {
       widget.onGranted();
       Navigator.of(context).pop(true);
     } else if (mounted) {
@@ -1034,7 +1034,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
     setState(() => _requesting = true);
 
     final result = await _ble.requestPermission();
-    if (result == BluetoothCentralState.granted && mounted) {
+    if (result == CentralBluetoothState.granted && mounted) {
       widget.onGranted();
       Navigator.of(context).pop(true);
     } else if (mounted) {
@@ -1046,7 +1046,7 @@ class _PermissionDialogState extends State<_PermissionDialog>
   }
 
   bool get _isPermanentlyDenied =>
-      _permissionState == BluetoothCentralState.permanentlyDenied;
+      _permissionState == CentralBluetoothState.permanentlyDenied;
 
   @override
   Widget build(BuildContext context) {

@@ -1,8 +1,8 @@
 export 'src/flutter_ble_central.dart';
 export 'src/models/bluetooth_device.dart';
 export 'src/models/enums/android_error.dart';
-export 'src/models/enums/bluetooth_central_state.dart';
 export 'src/models/enums/bond_state.dart';
+export 'src/models/enums/central_bluetooth_state.dart';
 export 'src/models/enums/central_state.dart';
 export 'src/models/enums/connection_priority.dart';
 export 'src/models/enums/gatt_connection_state.dart';

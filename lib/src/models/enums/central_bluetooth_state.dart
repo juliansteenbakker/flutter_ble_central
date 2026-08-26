@@ -5,7 +5,7 @@
  */
 
 /// Bluetooth Central state enum
-enum BluetoothCentralState {
+enum CentralBluetoothState {
   /// The user granted access to the requested feature.
   granted,
 
