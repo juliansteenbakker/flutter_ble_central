@@ -22,6 +22,8 @@ set(PLUGIN_NAME "flutter_ble_central_plugin")
 list(APPEND PLUGIN_SOURCES
         "flutter_ble_central_plugin.cpp"
         "flutter_ble_central_plugin.h"
+        "gatt_connection_manager.cpp"
+        "gatt_connection_manager.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

@@ -25,11 +25,56 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <optional>
+#include <vector>
 
 // For getPlatformVersion; remove unless needed for your plugin implementation.
 #include <VersionHelpers.h>
 
 namespace flutter_ble_central {
+
+namespace {
+
+// The value Dart sent under `key`, or nothing when it is absent or the wrong
+// type. A wrong type reads as absent, the way the Android side treats it.
+std::optional<std::string> ReadString(const EncodableMap& arguments,
+                                      const char* key) {
+  auto it = arguments.find(EncodableValue(key));
+  if (it == arguments.end()) return std::nullopt;
+  if (const auto* value = std::get_if<std::string>(&it->second)) return *value;
+  return std::nullopt;
+}
+
+std::optional<bool> ReadBool(const EncodableMap& arguments, const char* key) {
+  auto it = arguments.find(EncodableValue(key));
+  if (it == arguments.end()) return std::nullopt;
+  if (const auto* value = std::get_if<bool>(&it->second)) return *value;
+  return std::nullopt;
+}
+
+// Accepts both the byte buffer Dart sends for a Uint8List and the list of ints
+// it falls back to.
+std::optional<std::vector<uint8_t>> ReadBytes(const EncodableMap& arguments,
+                                              const char* key) {
+  auto it = arguments.find(EncodableValue(key));
+  if (it == arguments.end()) return std::nullopt;
+  if (const auto* bytes = std::get_if<std::vector<uint8_t>>(&it->second)) {
+    return *bytes;
+  }
+  if (const auto* list = std::get_if<flutter::EncodableList>(&it->second)) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(list->size());
+    for (const auto& entry : *list) {
+      if (const auto* number = std::get_if<int32_t>(&entry)) {
+        bytes.push_back(static_cast<uint8_t>(*number));
+      }
+    }
+    return bytes;
+  }
+  return std::nullopt;
+}
+
+}  // namespace
 
 // static
 void FlutterBleCentralPlugin::RegisterWithRegistrar(
@@ -84,17 +129,83 @@ auto event_scan_result =
       });
   event_state_changed->SetStreamHandler(std::move(state_handler));
 
+  // The three connection streams are all the same shape: park the sink on the
+  // plugin, and drop it again on cancel.
+  auto connection_stream = [&registrar](const char* name,
+                                        std::unique_ptr<flutter::EventSink<>>* sink) {
+    auto channel = std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
+        registrar->messenger(), name, &flutter::StandardMethodCodec::GetInstance());
+    channel->SetStreamHandler(std::make_unique<flutter::StreamHandlerFunctions<>>(
+        [sink](const flutter::EncodableValue*,
+               std::unique_ptr<flutter::EventSink<>>&& events)
+            -> std::unique_ptr<flutter::StreamHandlerError<>> {
+          *sink = std::move(events);
+          return nullptr;
+        },
+        [sink](const flutter::EncodableValue*)
+            -> std::unique_ptr<flutter::StreamHandlerError<>> {
+          *sink = nullptr;
+          return nullptr;
+        }));
+    return channel;
+  };
+
+  auto event_connection_state =
+      connection_stream("dev.steenbakker.flutter_ble_central/connection_state",
+                        &plugin->connection_state_sink_);
+  auto event_characteristic_value =
+      connection_stream("dev.steenbakker.flutter_ble_central/characteristic_value",
+                        &plugin->characteristic_value_sink_);
+  auto event_bond_state =
+      connection_stream("dev.steenbakker.flutter_ble_central/bond_state",
+                        &plugin->bond_state_sink_);
+
   registrar->AddPlugin(std::move(plugin));
 }
 
 FlutterBleCentralPlugin::FlutterBleCentralPlugin() {
+  // Built here rather than in the initialiser list: `alive_` is declared after
+  // it, so it is not constructed yet at that point.
+  gatt_ = std::make_unique<GattConnectionManager>(alive_, ui_thread_);
+  gatt_->SetCallbacks(
+      [this](const std::string& address, ConnectionState state) {
+        if (connection_state_sink_) {
+          connection_state_sink_->Success(EncodableValue(EncodableMap{
+              {EncodableValue("address"), EncodableValue(address)},
+              {EncodableValue("state"), EncodableValue(static_cast<int>(state))},
+          }));
+        }
+      },
+      [this](const std::string& address, const std::string& service_uuid,
+             const std::string& characteristic_uuid,
+             const std::vector<uint8_t>& value) {
+        if (characteristic_value_sink_) {
+          characteristic_value_sink_->Success(EncodableValue(EncodableMap{
+              {EncodableValue("address"), EncodableValue(address)},
+              {EncodableValue("serviceUuid"), EncodableValue(service_uuid)},
+              {EncodableValue("characteristicUuid"), EncodableValue(characteristic_uuid)},
+              {EncodableValue("value"), EncodableValue(value)},
+          }));
+        }
+      },
+      [this](const std::string& address, BondState state) {
+        if (bond_state_sink_) {
+          bond_state_sink_->Success(EncodableValue(EncodableMap{
+              {EncodableValue("address"), EncodableValue(address)},
+              {EncodableValue("bondState"), EncodableValue(static_cast<int>(state))},
+          }));
+        }
+      });
   InitializeAsync();
-  }
+}
 
 FlutterBleCentralPlugin::~FlutterBleCentralPlugin() {
   // Revoke before the members go away: a radio or watcher event firing
   // afterwards would run against a destroyed plugin.
   *alive_ = false;
+  // Same reason: a connection event arriving after this would run against a
+  // destroyed plugin, and every peripheral is dropped rather than left held.
+  if (gatt_) gatt_->CloseAll();
   try {
     if (bluetoothRadio && radioStateChangedToken) {
       bluetoothRadio.StateChanged(radioStateChangedToken);
@@ -242,6 +353,130 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         bluetoothLEWatcher = nullptr;
         result->Error("stop_failed", "Failed to stop scanning");
       }
+  } else if (IsConnectionMethod(method_call.method_name())) {
+      HandleConnectionMethod(method_call, std::move(result));
+  } else {
+    result->NotImplemented();
+  }
+}
+
+// Whether a method belongs to the GATT client half, so that everything it needs
+// to read out of the arguments is read in one place.
+bool FlutterBleCentralPlugin::IsConnectionMethod(const std::string& method) {
+  static const std::set<std::string> methods{
+      "connect", "disconnect", "getConnectionState", "discoverServices",
+      "readCharacteristic", "writeCharacteristic", "setCharacteristicNotification",
+      "readDescriptor", "writeDescriptor", "requestMtu", "createBond",
+      "removeBond", "readRssi", "setPreferredPhy", "readPhy",
+      "requestConnectionPriority", "beginReliableWrite", "executeReliableWrite",
+      "abortReliableWrite", "getBondState"};
+  return methods.count(method) > 0;
+}
+
+void FlutterBleCentralPlugin::ReportUnsupported(
+    const std::string& method,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  result->Error("unsupported", method + " is not available on Windows");
+}
+
+void FlutterBleCentralPlugin::HandleConnectionMethod(
+    const flutter::MethodCall<flutter::EncodableValue>& method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  const auto& method = method_call.method_name();
+
+  // Windows exposes no way to serve these, so they are refused by name rather
+  // than left to fail as a missing plugin.
+  if (method == "readRssi" || method == "setPreferredPhy" || method == "readPhy" ||
+      method == "requestConnectionPriority" || method == "beginReliableWrite" ||
+      method == "executeReliableWrite" || method == "abortReliableWrite" ||
+      method == "getBondState") {
+    ReportUnsupported(method, std::move(result));
+    return;
+  }
+
+  const auto* arguments = std::get_if<EncodableMap>(method_call.arguments());
+  if (!arguments) {
+    result->Error("INVALID_ARGUMENTS", "Arguments are not a map");
+    return;
+  }
+
+  // Everything Dart sends is read and validated here, on the platform thread.
+  // A uuid is parsed before any coroutine starts, because an exception escaping
+  // a fire_and_forget calls winrt::terminate rather than reaching Dart.
+  uint64_t address = 0;
+  winrt::guid service_uuid{};
+  winrt::guid characteristic_uuid{};
+  winrt::guid descriptor_uuid{};
+  std::vector<uint8_t> value;
+  try {
+    auto address_string = ReadString(*arguments, "address");
+    if (!address_string) {
+      result->Error("INVALID_ARGUMENTS", "address is required");
+      return;
+    }
+    address = std::stoull(*address_string);
+
+    if (auto uuid = ReadString(*arguments, "serviceUuid")) {
+      service_uuid = ParseUuid(*uuid);
+    }
+    if (auto uuid = ReadString(*arguments, "characteristicUuid")) {
+      characteristic_uuid = ParseUuid(*uuid);
+    }
+    if (auto uuid = ReadString(*arguments, "descriptorUuid")) {
+      descriptor_uuid = ParseUuid(*uuid);
+    }
+    if (auto bytes = ReadBytes(*arguments, "value")) {
+      value = *bytes;
+    }
+  } catch (const InvalidArgument& error) {
+    result->Error("INVALID_ARGUMENTS", error.what());
+    return;
+  } catch (...) {
+    result->Error("INVALID_ARGUMENTS", "address is not a device address");
+    return;
+  }
+
+  if (method == "connect") {
+    gatt_->Connect(address, std::move(result));
+  } else if (method == "disconnect") {
+    gatt_->Disconnect(address, std::move(result));
+  } else if (method == "getConnectionState") {
+    result->Success(EncodableValue(
+        static_cast<int>(gatt_->GetConnectionState(address))));
+  } else if (method == "discoverServices") {
+    gatt_->DiscoverServices(address, std::move(result));
+  } else if (method == "readCharacteristic") {
+    gatt_->ReadCharacteristic(address, service_uuid, characteristic_uuid,
+                              std::move(result));
+  } else if (method == "writeCharacteristic") {
+    auto without_response =
+        ReadBool(*arguments, "withoutResponse").value_or(false);
+    gatt_->WriteCharacteristic(address, service_uuid, characteristic_uuid, value,
+                               without_response, std::move(result));
+  } else if (method == "setCharacteristicNotification") {
+    auto enable = ReadBool(*arguments, "enable").value_or(false);
+    gatt_->SetCharacteristicNotification(address, service_uuid,
+                                         characteristic_uuid, enable,
+                                         std::move(result));
+  } else if (method == "readDescriptor") {
+    gatt_->ReadDescriptor(address, service_uuid, characteristic_uuid,
+                          descriptor_uuid, std::move(result));
+  } else if (method == "writeDescriptor") {
+    gatt_->WriteDescriptor(address, service_uuid, characteristic_uuid,
+                           descriptor_uuid, value, std::move(result));
+  } else if (method == "requestMtu") {
+    // Windows negotiates the MTU itself and offers no way to ask for one, so
+    // the requested size is ignored and the negotiated one is reported.
+    auto mtu = gatt_->GetMtu(address);
+    if (mtu == 0) {
+      result->Error("MTU_ERROR", "Device not connected");
+    } else {
+      result->Success(EncodableValue(mtu));
+    }
+  } else if (method == "createBond") {
+    gatt_->CreateBond(address, std::move(result));
+  } else if (method == "removeBond") {
+    gatt_->RemoveBond(address, std::move(result));
   } else {
     result->NotImplemented();
   }
