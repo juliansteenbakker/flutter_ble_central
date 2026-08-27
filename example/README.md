@@ -52,6 +52,37 @@ simulator.
 Both examples default to the same service UUID, so they find each other without
 any configuration. Change it in one and you have to change it in the other.
 
+## Running the pair unattended
+
+`tool/interop_test.dart` does the same thing without the tapping, and checks
+every call rather than just the round trip. From the root of the repository:
+
+```sh
+dart run tool/interop_test.dart
+```
+
+It lists the attached devices twice — once for the peripheral, once for the
+central — launches `lib/interop_harness.dart` on each, and prints what every
+call did:
+
+```
+  ✓ connect                                connected
+  ✓ requestMtu                             515
+  ✓ writeCharacteristic.withResponse       round trip of 3 bytes
+  ✓ readPhy                                unsupported, as documented
+```
+
+A call the platform is documented not to serve passes when it throws
+`unsupported` and fails when it answers, so a run also checks the support matrix
+in the main README against what the plugin actually does. It exits non-zero if
+anything failed, and keeps the full output of both halves under
+`.dart_tool/interop_test/`.
+
+It expects flutter_ble_peripheral beside this repository; pass
+`--peripheral-path` if it is somewhere else. Pairing is left alone unless you
+pass `--bonding`, since it needs someone to answer a system dialog and leaves a
+bond behind.
+
 ## In code
 
 ```dart
