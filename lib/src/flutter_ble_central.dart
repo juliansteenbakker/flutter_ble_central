@@ -252,6 +252,9 @@ class FlutterBleCentral {
   /// [address] The device address to connect to
   /// [autoConnect] Whether to automatically connect when device is available
   /// [timeout] Connection timeout in seconds (default: 15)
+  ///
+  /// Windows ignores [timeout]. It has no explicit connect to give up on: the
+  /// radio is asked to hold the link open and keeps trying until [disconnect].
   Future<void> connect({
     required String address,
     bool autoConnect = false,

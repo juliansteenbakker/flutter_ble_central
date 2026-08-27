@@ -222,6 +222,9 @@ Windows differs in a few places, because WinRT does not expose the same controls
 - `discoverServices` has to run before a read, a write or a subscription. Windows
   hands back the characteristic objects as part of discovery, and there is nothing
   to address without them.
+- `connect` ignores its `timeout`. There is no attempt to give up on: the radio
+  is asked to hold the link open and keeps trying until `disconnect`. Android and
+  Apple both stop after `timeout` seconds.
 - `requestMtu` reports the MTU the connection already negotiated; the size asked
   for is ignored, since Windows negotiates it itself.
 - `readRssi`, `readPhy`, `setPreferredPhy`, `requestConnectionPriority`,
