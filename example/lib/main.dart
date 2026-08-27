@@ -53,6 +53,11 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
   final _ble = FlutterBleCentral();
 
   final Map<String, ScanResult> _devices = {};
+
+  /// Whether the list is narrowed to peripherals advertising
+  /// [peripheralServiceUuid], which is what the peripheral example serves.
+  bool _onlyPeripheralExample = false;
+
   StreamSubscription<ScanResult>? _scanResultSub;
   StreamSubscription<int>? _scanErrorSub;
   StreamSubscription<CentralState>? _stateChangedSub;
@@ -91,6 +96,22 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
     unawaited(_characteristicValueSub?.cancel());
     _sendController.dispose();
     super.dispose();
+  }
+
+  /// What the device list shows: the filter applied, strongest signal first.
+  ///
+  /// Sorted on every build rather than on arrival, since an advertisement for a
+  /// device already in the list changes its RSSI and so its place.
+  List<ScanResult> get _visibleDevices {
+    final devices = _devices.values.where((result) {
+      if (!_onlyPeripheralExample) return true;
+      final uuids = result.scanRecord?.serviceUuids ?? const [];
+      return uuids.any(
+        (uuid) => uuid?.toLowerCase() == peripheralServiceUuid,
+      );
+    }).toList()
+      ..sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+    return devices;
   }
 
   void _listenToStreams() {
@@ -427,6 +448,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
 
   @override
   Widget build(BuildContext context) {
+    final devices = _visibleDevices;
     return MaterialApp(
       navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _messengerKey,
@@ -488,6 +510,16 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                           ),
                         ),
                       ],
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _onlyPeripheralExample,
+                      onChanged: (value) =>
+                          setState(() => _onlyPeripheralExample = value),
+                      title: const Text('Only the peripheral example'),
+                      subtitle: const Text(
+                        'Hides everything not advertising its service',
+                      ),
                     ),
                   ],
                 ),
@@ -571,7 +603,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
 
               // Device List
               if (_connectedAddress != null) _buildGattCard(context),
-              if (_devices.isEmpty)
+              if (devices.isEmpty)
                 Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -584,9 +616,7 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        _isScanning
-                            ? 'Scanning for devices...'
-                            : 'No devices found',
+                        _emptyDeviceListMessage,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               color: Theme.of(context).colorScheme.outline,
                             ),
@@ -597,55 +627,63 @@ class _FlutterBleCentralExampleState extends State<FlutterBleCentralExample> {
               else
                 ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _devices.length,
+                  itemCount: devices.length,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemBuilder: (context, index) {
-                    final scanResult = _devices.values.elementAt(index);
-                    final name = scanResult.scanRecord?.deviceName ?? 'Unknown';
-                    final address = scanResult.device?.address ?? 'N/A';
-                    final rssi = scanResult.rssi ?? 0;
-
-                    return Card(
-                      child: ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.bluetooth,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                          ),
-                        ),
-                        title: Text(name),
-                        subtitle: Text(address),
-                        onTap: _connecting || _connectedAddress != null
-                            ? null
-                            : () => _connect(address),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.signal_cellular_alt,
-                              color: _getRssiColor(rssi),
-                            ),
-                            Text(
-                              '$rssi dBm',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                  itemBuilder: (context, index) =>
+                      _buildDeviceTile(context, devices[index]),
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The message shown when the device list has nothing in it.
+  String get _emptyDeviceListMessage {
+    if (_onlyPeripheralExample && _devices.isNotEmpty) {
+      return 'No peripheral example found among ${_devices.length} devices';
+    }
+    return _isScanning ? 'Scanning for devices...' : 'No devices found';
+  }
+
+  /// One row of the device list.
+  Widget _buildDeviceTile(BuildContext context, ScanResult scanResult) {
+    final name = scanResult.scanRecord?.deviceName ?? 'Unknown';
+    final address = scanResult.device?.address ?? 'N/A';
+    final rssi = scanResult.rssi ?? 0;
+
+    return Card(
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.bluetooth,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
+        ),
+        title: Text(name),
+        subtitle: Text(address),
+        onTap: _connecting || _connectedAddress != null
+            ? null
+            : () => _connect(address),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.signal_cellular_alt,
+              color: _getRssiColor(rssi),
+            ),
+            Text(
+              '$rssi dBm',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ),
       ),
     );
