@@ -78,6 +78,12 @@ in the main README against what the plugin actually does. It exits non-zero if
 anything failed, and keeps the full output of both halves under
 `.dart_tool/interop_test/`.
 
+If more than one peripheral is serving the harness service, the run says so and
+fails rather than trusting the results: a second one is usually a copy of the app
+left running from an earlier session, and it answers discovery and reads while
+echoing nothing, which looks like a plugin bug rather than the stale process it
+is.
+
 It expects flutter_ble_peripheral beside this repository; pass
 `--peripheral-path` if it is somewhere else. Pairing is left alone unless you
 pass `--bonding`, since it needs someone to answer a system dialog and leaves a

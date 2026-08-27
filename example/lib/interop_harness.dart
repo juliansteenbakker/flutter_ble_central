@@ -269,18 +269,29 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
       state == CentralBluetoothState.granted ||
       state == CentralBluetoothState.ready;
 
+  /// How long to keep scanning after the first match, to notice a second
+  /// peripheral serving the same uuid.
+  static const _settleWindow = Duration(seconds: 3);
+
   /// Scans until the peripheral harness turns up, and answers its address.
   Future<String?> _findPeripheral() async {
     final found = Completer<String>();
+    // Every peripheral serving the uuid, not just the first: a second one is
+    // usually a copy of the app left running from an earlier session, and it
+    // would answer discovery and reads while echoing nothing, which reads as a
+    // plugin bug rather than the stale process it is.
+    final matched = <String>{};
+
     final subscription = _ble.onScanResult.listen((result) {
-      if (found.isCompleted) return;
       final address = result.device?.address;
       if (address == null) return;
       final uuids = result.scanRecord?.serviceUuids ?? const <String?>[];
       final matches = uuids.any(
         (uuid) => uuid?.toLowerCase() == harnessServiceUuid,
       );
-      if (matches) found.complete(address);
+      if (!matches) return;
+      matched.add(address);
+      if (!found.isCompleted) found.complete(address);
     });
 
     try {
@@ -309,7 +320,21 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
       }
       _report('findPeripheral', Outcome.pass, address);
 
+      // Kept scanning a moment longer, so a second one has a chance to show up.
+      await Future<void>.delayed(_settleWindow);
       await _check('stopScan', () async => (await _ble.stop()).name);
+
+      if (matched.length > 1) {
+        _report(
+          'onePeripheralOnly',
+          Outcome.fail,
+          '${matched.length} peripherals serve $harnessServiceUuid '
+              '(${matched.join(', ')}). Close the extra one: the results below '
+              'are whichever answered, not necessarily the harness.',
+        );
+      } else {
+        _report('onePeripheralOnly', Outcome.pass, '1');
+      }
       return address;
     } finally {
       await subscription.cancel();
