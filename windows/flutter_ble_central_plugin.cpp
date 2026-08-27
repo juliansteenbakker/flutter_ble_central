@@ -574,6 +574,13 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     auto rssi = args.RawSignalStrengthInDBm();
     auto address = std::to_string(bluetoothAddress);
 
+    // The uuids a peripheral advertises are how a central picks the one it
+    // wants out of everything in range, so they have to reach Dart.
+    flutter::EncodableList service_uuids;
+    for (auto const& uuid : args.Advertisement().ServiceUuids()) {
+      service_uuids.push_back(flutter::EncodableValue(FormatUuid(uuid)));
+    }
+
     // Switch to UI thread before sending to Flutter
     co_await ui_thread_;
     if (!*alive) co_return;
@@ -585,6 +592,7 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
         {"manufacturerSpecificData", manufacturer_data},
         {"rssi", rssi},
         {"manufacturerId", manufacturerId},
+        {"serviceUuids", service_uuids},
       });
     }
   }
