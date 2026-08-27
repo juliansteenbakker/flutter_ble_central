@@ -13,8 +13,8 @@ as `ScanResult`s. For the other direction, see
 | Platform | Minimum version | Scanning | Connecting |
 | --- | --- | --- | --- |
 | Android | API 21 | Full `ScanSettings` support | yes |
-| iOS | 13.0 | Scan settings are ignored by CoreBluetooth | not yet |
-| macOS | 10.14 | Scan settings are ignored by CoreBluetooth | not yet |
+| iOS | 13.0 | Scan settings are ignored by CoreBluetooth | yes, with the [differences below](#connecting) |
+| macOS | 10.15 | Scan settings are ignored by CoreBluetooth | yes, with the [differences below](#connecting) |
 | Windows | Windows 10 | Scan settings are ignored | yes, with the [differences below](#connecting) |
 
 ## Installation
@@ -177,8 +177,8 @@ advertisement when scanning in a busy environment.
 
 ### Connecting
 
-Android and Windows. Connect to a device found by scanning, discover what it serves,
-then read, write or subscribe. Apple has no connection support yet.
+Connect to a device found by scanning, discover what it serves, then read, write
+or subscribe. Every platform serves this.
 
 ```dart
 await ble.connect(address: address);
@@ -222,6 +222,9 @@ Windows differs in a few places, because WinRT does not expose the same controls
 - `discoverServices` has to run before a read, a write or a subscription. Windows
   hands back the characteristic objects as part of discovery, and there is nothing
   to address without them.
+- `connect` ignores its `timeout`. There is no attempt to give up on: the radio
+  is asked to hold the link open and keeps trying until `disconnect`. Android and
+  Apple both stop after `timeout` seconds.
 - `requestMtu` reports the MTU the connection already negotiated; the size asked
   for is ignored, since Windows negotiates it itself.
 - `readRssi`, `readPhy`, `setPreferredPhy`, `requestConnectionPriority`,
@@ -230,6 +233,21 @@ Windows differs in a few places, because WinRT does not expose the same controls
 - `createBond` accepts only the pairing ceremony that needs no passkey, which
   covers most peripherals. One that asks for a passkey or a numeric comparison is
   refused, and the refusal arrives on `onBondStateChanged` as `none`.
+
+Apple differs too, because Core Bluetooth hides more of the link:
+
+- The address is the peripheral's Core Bluetooth identifier, which is per app and
+  per install rather than a hardware address. It is only good on the device that
+  produced it, and only for a peripheral this app has already scanned for.
+- `discoverServices` has to run before a read, a write or a subscription, the same
+  as on Windows.
+- `requestMtu` reports the MTU the link negotiated; the size asked for is ignored,
+  since Core Bluetooth negotiates it itself.
+- Core Bluetooth has no pairing API at all, so `createBond`, `removeBond` and
+  `getBondState` throw `unsupported` and `onBondStateChanged` never emits. Pairing
+  happens on its own when a peripheral asks for it.
+- `readPhy`, `setPreferredPhy`, `requestConnectionPriority` and the reliable write
+  trio throw `unsupported`. `readRssi` does work, unlike on Windows.
 
 ### Pairing, PHY and reliable write
 
@@ -268,8 +286,8 @@ controller agreed on. PHY control needs Android 8.0.
 | `onRawScanResult` | `dynamic`, straight from the platform | all |
 | `onScanError` | `int`, an Android `SCAN_FAILED_*` code | Android only, `null` elsewhere |
 | `onCentralStateChanged` | `CentralState` | all |
-| `onConnectionStateChanged` | `ConnectionStateChange` | Android and Windows |
-| `onCharacteristicValueChanged` | `CharacteristicValue` | Android and Windows |
+| `onConnectionStateChanged` | `ConnectionStateChange` | all |
+| `onCharacteristicValueChanged` | `CharacteristicValue` | all |
 | `onBondStateChanged` | `BondStateChange` | Android and Windows |
 
 ## API
@@ -288,7 +306,8 @@ controller agreed on. PHY control needs Android 8.0.
 | `enableTimingStats` | `bool` field | Logs native timing information per scan result |
 
 Connection members. Android serves all of them. Windows serves everything down to
-`removeBond` and throws `unsupported` for the rest. Apple serves none of them yet:
+`removeBond`, and Apple everything down to `readRssi`; both throw `unsupported`
+for the rest:
 
 | Member | Returns | Description |
 | --- | --- | --- |

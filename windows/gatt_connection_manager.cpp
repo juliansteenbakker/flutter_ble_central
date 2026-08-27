@@ -308,8 +308,11 @@ winrt::fire_and_forget GattConnectionManager::Connect(uint64_t address,
     co_await ui_thread_;
     if (!lifetime->load()) co_return;
 
-    // A disconnect while this was in flight; the caller no longer wants it.
+    // Another connect landed while this one was in flight. The session opened
+    // here is dropped rather than left holding the link.
     if (Find(key)) {
+      session.MaintainConnection(false);
+      session.Close();
       result->Error("CONNECTION_ERROR", "Already connected to device");
       co_return;
     }
@@ -772,6 +775,10 @@ winrt::fire_and_forget GattConnectionManager::CreateBond(uint64_t address,
                                                          MethodResult result) {
   auto lifetime = alive_;
   auto key = std::to_string(address);
+  // The result is answered before the ceremony starts, so a failure after that
+  // point goes out on the bond stream instead. Tracked, since a failure before
+  // it still has to reach Dart.
+  auto answered = false;
 
   try {
     auto device = co_await BluetoothLEDevice::FromBluetoothAddressAsync(address);
@@ -789,6 +796,7 @@ winrt::fire_and_forget GattConnectionManager::CreateBond(uint64_t address,
 
     auto pairing = information.Pairing();
     if (pairing.IsPaired()) {
+      answered = true;
       result->Success();
       if (on_bond_) on_bond_(key, BondState::Bonded);
       co_return;
@@ -796,6 +804,7 @@ winrt::fire_and_forget GattConnectionManager::CreateBond(uint64_t address,
 
     // Pairing is a request, the way Android's createBond is: it is answered
     // once the ceremony ends, and the outcome also goes out on the bond stream.
+    answered = true;
     result->Success();
     if (on_bond_) on_bond_(key, BondState::Bonding);
 
@@ -822,8 +831,7 @@ winrt::fire_and_forget GattConnectionManager::CreateBond(uint64_t address,
                   status == DevicePairingResultStatus::AlreadyPaired;
     if (on_bond_) on_bond_(key, bonded ? BondState::Bonded : BondState::None);
   } catch (...) {
-    // The result is answered before the ceremony starts, so a failure after
-    // that point is reported on the bond stream rather than thrown.
+    if (!answered) result->Error("BOND_ERROR", "Failed to pair with the device");
     if (on_bond_) on_bond_(key, BondState::None);
   }
 }
