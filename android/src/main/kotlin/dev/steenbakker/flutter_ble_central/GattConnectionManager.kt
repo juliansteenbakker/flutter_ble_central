@@ -178,25 +178,44 @@ class GattConnectionManager(
     fun disconnect(address: String) {
         gattConnections[address]?.let { gatt ->
             try {
+                // Closing here would unregister the client before the stack
+                // reports the disconnect, so onConnectionStateChange would never
+                // fire and nothing waiting on the connection state would hear
+                // that it finished. The callback closes it and clears the rest.
                 gatt.disconnect()
-                gatt.close()
             } catch (e: Exception) {
                 Log.e(TAG, "Error disconnecting: ${e.message}")
-            } finally {
-                gattConnections.remove(address)
-                discoveredServices.remove(address)
-                serviceDiscoveryCallbacks.remove(address)
-                // Remove all characteristic and descriptor callbacks for this address (efficient pattern)
-                characteristicReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
-                descriptorReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
-                rssiCallbacks.remove(address)
-                mtuCallbacks.remove(address)
-                phyReadCallbacks.remove(address)
-                reliableWriteCallbacks.remove(address)
-                connectionTimeouts[address]?.let { handler.removeCallbacks(it) }
-                connectionTimeouts.remove(address)
+                // No callback is coming, so report it and clean up here.
+                try {
+                    gatt.close()
+                } catch (closeError: Exception) {
+                    Log.e(TAG, "Error closing: ${closeError.message}")
+                }
+                connectionStateHandler.publishConnectionState(
+                    address,
+                    BluetoothProfile.STATE_DISCONNECTED
+                )
+                forget(address)
             }
         }
+    }
+
+    /**
+     * Drops everything held for a connection that is gone.
+     */
+    private fun forget(address: String) {
+        gattConnections.remove(address)
+        discoveredServices.remove(address)
+        serviceDiscoveryCallbacks.remove(address)
+        // Remove all characteristic and descriptor callbacks for this address (efficient pattern)
+        characteristicReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
+        descriptorReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
+        rssiCallbacks.remove(address)
+        mtuCallbacks.remove(address)
+        phyReadCallbacks.remove(address)
+        reliableWriteCallbacks.remove(address)
+        connectionTimeouts[address]?.let { handler.removeCallbacks(it) }
+        connectionTimeouts.remove(address)
     }
 
     /**
@@ -555,18 +574,7 @@ class GattConnectionManager(
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         connectionStateHandler.publishConnectionState(address, newState)
-                        gattConnections.remove(address)
-                        discoveredServices.remove(address)
-                        serviceDiscoveryCallbacks.remove(address)
-                        // Remove all characteristic and descriptor callbacks for this address (efficient pattern)
-                        characteristicReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
-                        descriptorReadCallbacks.entries.removeIf { it.key.startsWith("$address:") }
-                        rssiCallbacks.remove(address)
-                        mtuCallbacks.remove(address)
-                        phyReadCallbacks.remove(address)
-                        reliableWriteCallbacks.remove(address)
-                        connectionTimeouts[address]?.let { handler.removeCallbacks(it) }
-                        connectionTimeouts.remove(address)
+                        forget(address)
                         gatt.close()
                     }
                 }
