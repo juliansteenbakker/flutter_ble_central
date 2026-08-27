@@ -120,6 +120,9 @@ class _Options {
   final bool keepRunning;
 }
 
+/// `flutter` is a batch file on Windows, which cannot be spawned by name.
+final _flutter = Platform.isWindows ? 'flutter.bat' : 'flutter';
+
 /// One device `flutter devices` reported.
 class _Device {
   _Device(this.id, this.name, this.platform);
@@ -133,7 +136,7 @@ class _Device {
 
 /// The attached devices BLE can actually run on.
 Future<List<_Device>> _listDevices() async {
-  final result = await Process.run('flutter', ['devices', '--machine']);
+  final result = await Process.run(_flutter, ['devices', '--machine']);
   if (result.exitCode != 0) {
     _fail('flutter devices failed:\n${result.stderr}');
   }
@@ -294,7 +297,7 @@ class _Run {
     _logs[label] = log;
 
     final process = await Process.start(
-      'flutter',
+      _flutter,
       [
         'run',
         '-d',

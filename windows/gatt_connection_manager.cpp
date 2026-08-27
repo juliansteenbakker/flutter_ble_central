@@ -339,6 +339,26 @@ winrt::fire_and_forget GattConnectionManager::Connect(uint64_t address,
         device.ConnectionStatus() == BluetoothConnectionStatus::Connected;
     PublishState(key, connected ? ConnectionState::Connected
                                 : ConnectionState::Connecting);
+    if (connected) co_return;
+
+    // MaintainConnection on its own only says the link should be kept once it
+    // exists; the radio does not reach out until something asks the peripheral
+    // for its database. Without this a connect to an unpaired peripheral sits
+    // in connecting until it times out, and the peripheral never sees it.
+    auto token = connections_[key].token;
+    co_await device.GetGattServicesAsync(BluetoothCacheMode::Uncached);
+    co_await ui_thread_;
+    if (!lifetime->load()) co_return;
+
+    // Closed, or reconnected under the same address, while the request was out.
+    auto* still = Find(key);
+    if (!still || still->token != token) co_return;
+
+    // ConnectionStatusChanged reports the link coming up, but it has often
+    // already fired by the time the request resolves.
+    if (device.ConnectionStatus() == BluetoothConnectionStatus::Connected) {
+      PublishState(key, ConnectionState::Connected);
+    }
   } catch (const winrt::hresult_error& error) {
     Close(key);
     result->Error("CONNECTION_ERROR", winrt::to_string(error.message()));
