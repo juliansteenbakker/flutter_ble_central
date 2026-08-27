@@ -23,6 +23,7 @@
 #include "gatt_connection_manager.h"
 
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -102,6 +103,16 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   Radio bluetoothRadio{ nullptr };
   winrt::event_token radioStateChangedToken;
+
+  // Runs work that needs the adapter, once InitializeAsync has looked it up.
+  // A call arriving before that would read a null radio and report the adapter
+  // missing when it is only late, so it waits here instead of answering wrong.
+  void WhenRadioReady(std::function<void()> work);
+
+  // Whether InitializeAsync has finished. Both this and the queue are only
+  // touched on the UI thread, so neither needs a lock.
+  bool radio_looked_up_ = false;
+  std::vector<std::function<void()>> waiting_on_radio_;
 
   // UI thread context for dispatching callbacks to Flutter
   winrt::apartment_context ui_thread_;

@@ -258,6 +258,19 @@ winrt::fire_and_forget FlutterBleCentralPlugin::InitializeAsync() {
   co_await ui_thread_;
   if (!*alive) co_return;
   PublishState(state);
+
+  radio_looked_up_ = true;
+  auto waiting = std::move(waiting_on_radio_);
+  waiting_on_radio_.clear();
+  for (auto& work : waiting) work();
+}
+
+void FlutterBleCentralPlugin::WhenRadioReady(std::function<void()> work) {
+  if (radio_looked_up_) {
+    work();
+    return;
+  }
+  waiting_on_radio_.push_back(std::move(work));
 }
 
 void FlutterBleCentralPlugin::HandleMethodCall(
@@ -276,30 +289,42 @@ void FlutterBleCentralPlugin::HandleMethodCall(
     result->Success(flutter::EncodableValue(version_stream.str()));
 
     } else if (method_call.method_name().compare("isSupported") == 0) {
-      bool supported = false;
-      try {
-        supported = bluetoothRadio != nullptr &&
-            bluetoothRadio.State() != RadioState::Disabled;
-      } catch (...) {}
-      result->Success(flutter::EncodableValue(supported));
+      WhenRadioReady([this, shared = std::shared_ptr(std::move(result))]() {
+        bool supported = false;
+        try {
+          supported = bluetoothRadio != nullptr &&
+              bluetoothRadio.State() != RadioState::Disabled;
+        } catch (...) {}
+        shared->Success(flutter::EncodableValue(supported));
+      });
+      return;
     } else if (method_call.method_name().compare("isBluetoothOn") == 0) {
-      bool isOn = false;
-      try {
-        if (bluetoothRadio) {
-          isOn = (bluetoothRadio.State() == RadioState::On);
+      WhenRadioReady([this, shared = std::shared_ptr(std::move(result))]() {
+        bool isOn = false;
+        try {
+          if (bluetoothRadio) {
+            isOn = (bluetoothRadio.State() == RadioState::On);
+          }
         }
-      }
-      catch (...) {
-        isOn = false;
-      }
-      result->Success(flutter::EncodableValue(isOn));
+        catch (...) {
+          isOn = false;
+        }
+        shared->Success(flutter::EncodableValue(isOn));
+      });
+      return;
     } else if (method_call.method_name().compare("hasPermission") == 0) {
       // Windows doesn't have a permission system like mobile platforms
       // Return "granted" (0) if Bluetooth is available
-      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+      WhenRadioReady([this, shared = std::shared_ptr(std::move(result))]() {
+        shared->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+      });
+      return;
     } else if (method_call.method_name().compare("requestPermission") == 0) {
       // Windows doesn't require permission requests
-      result->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+      WhenRadioReady([this, shared = std::shared_ptr(std::move(result))]() {
+        shared->Success(flutter::EncodableValue(bluetoothRadio != nullptr ? 0 : 1));
+      });
+      return;
     } else if (method_call.method_name().compare("enableBluetooth") == 0) {
       EnableBluetoothAsync(std::move(result));
       return;
