@@ -123,6 +123,29 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
   winrt::fire_and_forget BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
   void BluetoothLEWatcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args);
 
+  // What one peripheral has said so far.
+  //
+  // A watcher raises Received once per packet, and a peripheral splits what it
+  // broadcasts across two of them: the advertisement carries the service uuids
+  // and the scan response carries the local name, or the other way round.
+  // Reporting each packet on its own would have every field arrive alone and
+  // blank out what the packet before it carried, so they are folded together
+  // here and the whole of what the peripheral has said is reported each time.
+  // That is what Android and Core Bluetooth hand their callers, and what a
+  // caller keying on the address expects.
+  struct SeenPeripheral {
+    std::optional<std::string> name;
+    flutter::EncodableList service_uuids;
+    std::vector<uint8_t> manufacturer_data;
+    uint16_t manufacturer_id = 0;
+  };
+
+  // Keyed by Bluetooth address, and only touched on the UI thread, after the
+  // received handler has switched to it, so it needs no lock. Cleared when a
+  // scan starts or stops: an address does not name the same peripheral across
+  // scans, since Android and Apple both rotate theirs.
+  std::map<uint64_t, SeenPeripheral> seen_peripherals_;
+
   // State changed event channel handlers
   std::unique_ptr<flutter::StreamHandlerError<>> OnStateListenInternal(
       const flutter::EncodableValue* arguments,
