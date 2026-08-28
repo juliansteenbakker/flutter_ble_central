@@ -1135,9 +1135,18 @@ class GattConnectionManager(
      */
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun cleanup() {
-        // Disconnect all devices (snapshot keys to avoid ConcurrentModificationException)
+        // Disconnect all devices (snapshot keys to avoid ConcurrentModificationException).
+        // The engine is going away, so no callback will arrive to close these for us.
         gattConnections.keys.toList().forEach { address ->
-            disconnect(address)
+            try {
+                gattConnections[address]?.let {
+                    it.disconnect()
+                    it.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error disconnecting: ${e.message}")
+            }
+            forget(address)
         }
 
         synchronized(queueLock) {
