@@ -693,18 +693,18 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
   }
 
   static IconData _iconFor(Outcome outcome) => switch (outcome) {
-        Outcome.pass => Icons.check_circle,
-        Outcome.fail => Icons.cancel,
-        Outcome.skip => Icons.remove_circle_outline,
-        Outcome.info => Icons.info_outline,
-      };
+    Outcome.pass => Icons.check_circle,
+    Outcome.fail => Icons.cancel,
+    Outcome.skip => Icons.remove_circle_outline,
+    Outcome.info => Icons.info_outline,
+  };
 
   static Color _colorFor(Outcome outcome) => switch (outcome) {
-        Outcome.pass => Colors.green,
-        Outcome.fail => Colors.red,
-        Outcome.skip => Colors.grey,
-        Outcome.info => Colors.blue,
-      };
+    Outcome.pass => Colors.green,
+    Outcome.fail => Colors.red,
+    Outcome.skip => Colors.grey,
+    Outcome.info => Colors.blue,
+  };
 }
 
 extension _FirstWhereOrNull<T> on Iterable<T> {

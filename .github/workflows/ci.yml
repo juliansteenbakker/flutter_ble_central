@@ -108,6 +108,39 @@ jobs:
       - name: Lint Code
         run: flutter analyze ${{ matrix.analyze-paths }}
 
+  shared_example_code:
+    name: Shared Example Code
+    needs: analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          path: central
+
+      - name: Checkout flutter_ble_peripheral
+        uses: actions/checkout@v7
+        with:
+          repository: juliansteenbakker/flutter_ble_peripheral
+          ref: develop
+          path: peripheral
+
+      - name: Set Up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # The two example apps share their shell and their game verbatim. An
+      # example cannot depend on a package that is not on pub, and a path
+      # dependency on a sibling repository breaks for anyone who clones only
+      # one, so the files are copied and this keeps the copies honest.
+      - name: Compare Shared Files
+        working-directory: central
+        run: dart run tool/sync_example_shell.dart --peripheral-path=../peripheral
+
   formatting:
     name: Formatting
     needs: analysis
