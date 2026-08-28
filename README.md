@@ -334,9 +334,11 @@ for the rest:
 
 ## Example
 
-The [example app](example/lib/main.dart) is a full scanner with a GATT client on top:
-permission handling, adapter state, live results, scan settings, and connecting to a
-peripheral to exchange bytes. Run it with `cd example && flutter run`.
+The [example app](example/README.md) is a full scanner with a GATT client on top,
+laid out over four pages: scanning and connecting, the whole GATT surface, a game of
+pong over the link, and scan settings with permissions. Every optional call is on the
+page whether or not this platform serves it, so the app doubles as the support matrix.
+Run it with `cd example && flutter run`.
 
 It is the central half of a pair. Run the
 [flutter_ble_peripheral](https://github.com/juliansteenbakker/flutter_ble_peripheral)
