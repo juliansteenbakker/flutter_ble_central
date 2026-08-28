@@ -263,16 +263,22 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
     telemetry.report(grade: SignalGrade.fair, caption: 'connecting', level: .4);
     notifyListeners();
 
+    // Subscribed before the connect rather than after it: connect answers as
+    // soon as the request is in, and a peripheral that is already connected is
+    // reported the moment it resolves. Waiting afterwards misses that event on
+    // a broadcast stream, and nothing repeats it, so the link would come up and
+    // the app would sit here until the timeout and then hang up on itself.
+    final connected = _ble.onConnectionStateChanged
+        .where(
+          (event) =>
+              event.address == address &&
+              event.state == GattConnectionState.connected,
+        )
+        .first;
+
     try {
       await _ble.connect(address: address);
-      await _ble.onConnectionStateChanged
-          .where(
-            (event) =>
-                event.address == address &&
-                event.state == GattConnectionState.connected,
-          )
-          .first
-          .timeout(const Duration(seconds: 15));
+      await connected.timeout(const Duration(seconds: 15));
 
       _connectionState = GattConnectionState.connected;
       _services = await _ble.discoverServices(address);

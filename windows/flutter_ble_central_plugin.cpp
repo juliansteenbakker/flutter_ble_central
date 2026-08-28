@@ -350,6 +350,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         }
         auto status = bluetoothLEWatcher.Status();
         if (status != BluetoothLEAdvertisementWatcherStatus::Started) {
+          seen_peripherals_.clear();
           bluetoothLEWatcher.Start();
         }
         result->Success(flutter::EncodableValue());
@@ -370,12 +371,14 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         bluetoothLEWatcherReceivedToken = {};
         bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
+        seen_peripherals_.clear();
         result->Success(flutter::EncodableValue());
       }
       catch (...) {
         bluetoothLEWatcherReceivedToken = {};
         bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
+        seen_peripherals_.clear();
         result->Error("stop_failed", "Failed to stop scanning");
       }
   } else if (IsConnectionMethod(method_call.method_name())) {
@@ -562,15 +565,12 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     auto manufacturer_data = parseManufacturerData(args.Advertisement());
     auto bluetoothAddress = args.BluetoothAddress();
     auto localName = args.Advertisement().LocalName();
-    auto name = winrt::to_string(localName);
-    if (localName.empty()) {
-      std::stringstream sstream;
-      sstream << std::hex << bluetoothAddress;
-      name = sstream.str();
-    }
-    auto manufacturerId = args.Advertisement().ManufacturerData().Size() > 0
-        ? args.Advertisement().ManufacturerData().GetAt(0).CompanyId()
-        : 0;
+    std::optional<std::string> name;
+    if (!localName.empty()) name = winrt::to_string(localName);
+    const uint16_t manufacturerId =
+        args.Advertisement().ManufacturerData().Size() > 0
+            ? args.Advertisement().ManufacturerData().GetAt(0).CompanyId()
+            : uint16_t{0};
     auto rssi = args.RawSignalStrengthInDBm();
     auto address = std::to_string(bluetoothAddress);
 
@@ -585,14 +585,29 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     co_await ui_thread_;
     if (!*alive) co_return;
 
+    // Fold this packet into what the peripheral has already said. Only what it
+    // carries is taken: the fields it left out are the ones that were in the
+    // packet before it, and overwriting those with nothing is the whole bug
+    // this guards against.
+    auto& seen = seen_peripherals_[bluetoothAddress];
+    if (name) seen.name = std::move(name);
+    if (!service_uuids.empty()) seen.service_uuids = std::move(service_uuids);
+    if (!manufacturer_data.empty()) {
+      seen.manufacturer_data = std::move(manufacturer_data);
+      seen.manufacturer_id = manufacturerId;
+    }
+
     if (scan_result_sink_) {
+      // The rssi is this packet's rather than the merged record's: it is a
+      // reading taken now, not something the peripheral said.
       scan_result_sink_->Success(flutter::EncodableMap{
-        {"deviceName", name},
+        {"deviceName", seen.name ? flutter::EncodableValue(*seen.name)
+                                 : flutter::EncodableValue()},
         {"address", address},
-        {"manufacturerSpecificData", manufacturer_data},
+        {"manufacturerSpecificData", seen.manufacturer_data},
         {"rssi", rssi},
-        {"manufacturerId", manufacturerId},
-        {"serviceUuids", service_uuids},
+        {"manufacturerId", static_cast<int32_t>(seen.manufacturer_id)},
+        {"serviceUuids", seen.service_uuids},
       });
     }
   }

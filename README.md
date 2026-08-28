@@ -152,6 +152,14 @@ await subscription.cancel();
 `start` returns a `CentralBluetoothState`, so a scan that could not be started because
 Bluetooth is off or unsupported is reported rather than thrown.
 
+A peripheral is reported once per advertising packet, so the same address arrives many
+times over a scan. Each result carries everything that peripheral has said so far, not
+only what the last packet held: a peripheral usually splits its advertisement in two,
+putting the service uuids in one packet and the local name in the other, and the
+halves are folded together for you. Keeping the newest result per address gives you
+both. `deviceName` is null until a name is heard, which for an Android peripheral is
+never — it has no way to advertise one of its own.
+
 ### Scan settings
 
 `ScanSettings` mirrors Android's
