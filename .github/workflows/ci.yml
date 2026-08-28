@@ -120,11 +120,25 @@ jobs:
         with:
           path: central
 
+      # A change to the shared files lands as a pair of pull requests on the
+      # same branch name. Compare against that branch when it exists, so the
+      # two sides can be reviewed together; against develop otherwise.
+      - name: Resolve the branch to compare against
+        id: peer
+        run: |
+          remote=https://github.com/juliansteenbakker/flutter_ble_peripheral.git
+          ref="${{ github.head_ref || github.ref_name }}"
+          if ! git ls-remote --exit-code --heads "$remote" "$ref" >/dev/null 2>&1; then
+            ref=develop
+          fi
+          echo "Comparing against flutter_ble_peripheral@$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Checkout flutter_ble_peripheral
         uses: actions/checkout@v7
         with:
           repository: juliansteenbakker/flutter_ble_peripheral
-          ref: develop
+          ref: ${{ steps.peer.outputs.ref }}
           path: peripheral
 
       - name: Set Up Flutter
