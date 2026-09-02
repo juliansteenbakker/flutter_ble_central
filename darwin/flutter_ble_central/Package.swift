@@ -7,16 +7,20 @@ let package = Package(
     name: "flutter_ble_central",
     platforms: [
         .iOS("13.0"),
-        .macOS("10.14")
+        .macOS("10.15")
     ],
     products: [
         .library(name: "flutter-ble-central", targets: ["flutter_ble_central"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(name: "FlutterFramework", path: "../FlutterFramework")
+    ],
     targets: [
         .target(
             name: "flutter_ble_central",
-            dependencies: [],
+            dependencies: [
+                .product(name: "FlutterFramework", package: "FlutterFramework")
+            ],
             resources: [
                 .process("Resources"),
             ]

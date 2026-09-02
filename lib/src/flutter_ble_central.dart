@@ -10,8 +10,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_ble_central/src/models/enums/bluetooth_central_state.dart';
+import 'package:flutter_ble_central/src/models/enums/bond_state.dart';
+import 'package:flutter_ble_central/src/models/enums/central_bluetooth_state.dart';
 import 'package:flutter_ble_central/src/models/enums/central_state.dart';
+import 'package:flutter_ble_central/src/models/enums/connection_priority.dart';
+import 'package:flutter_ble_central/src/models/enums/gatt_connection_state.dart';
+import 'package:flutter_ble_central/src/models/enums/gatt_phy.dart';
+import 'package:flutter_ble_central/src/models/gatt_events.dart';
+import 'package:flutter_ble_central/src/models/gatt_service.dart';
 import 'package:flutter_ble_central/src/models/scan_result.dart';
 import 'package:flutter_ble_central/src/models/scan_settings.dart';
 
@@ -40,8 +46,9 @@ class FlutterBleCentral {
   bool enableTimingStats = false;
 
   /// Method Channel used to communicate state with
-  final MethodChannel _methodChannel =
-      const MethodChannel('dev.steenbakker.flutter_ble_central/method');
+  final MethodChannel _methodChannel = const MethodChannel(
+    'dev.steenbakker.flutter_ble_central/method',
+  );
 
   /// Event Channel for Scan Result
   final EventChannel _scanResultEventChannel = const EventChannel(
@@ -58,16 +65,32 @@ class FlutterBleCentral {
     'dev.steenbakker.flutter_ble_central/ble_state_changed',
   );
 
+  /// Event Channel for Connection State
+  final EventChannel _connectionStateEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/connection_state',
+  );
+
+  /// Event Channel for Characteristic Notifications
+  final EventChannel _characteristicValueEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/characteristic_value',
+  );
+
+  /// Event Channel used to receive pairing state changes
+  final EventChannel _bondStateEventChannel = const EventChannel(
+    'dev.steenbakker.flutter_ble_central/bond_state',
+  );
+
   Stream<ScanResult>? _scanResult;
   StreamTransformer<dynamic, ScanResult>? _scanResultTransformer;
 
   Stream<int>? _scanError;
   Stream<CentralState>? _centralState;
+  Stream<ConnectionStateChange>? _connectionState;
+  Stream<CharacteristicValue>? _characteristicValue;
+  Stream<BondStateChange>? _bondState;
 
   /// Start scanning. Takes [ScanSettings] as an input.
-  Future<BluetoothCentralState> start({
-    ScanSettings? scanSettings,
-  }) async {
+  Future<CentralBluetoothState> start({ScanSettings? scanSettings}) async {
     final settings = (scanSettings ?? ScanSettings()).toJson();
     settings['enableTimingStats'] = enableTimingStats;
 
@@ -75,32 +98,28 @@ class FlutterBleCentral {
       try {
         await _methodChannel.invokeMethod('start', settings);
       } on PlatformException catch (e) {
+        if (e.code == 'unsupported') return CentralBluetoothState.unsupported;
         debugPrint('$tag platform exception: $e');
-        return BluetoothCentralState.turnedOff;
+        return CentralBluetoothState.turnedOff;
       }
-      return BluetoothCentralState.ready;
+      return CentralBluetoothState.ready;
     }
     final response = await _methodChannel.invokeMethod<int>('start', settings);
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Stop advertising
-  Future<BluetoothCentralState> stop() async {
+  Future<CentralBluetoothState> stop() async {
     if (Platform.isWindows) {
       await _methodChannel.invokeMethod<bool>('stop');
-      return BluetoothCentralState.ready;
+      return CentralBluetoothState.ready;
     }
     final response = await _methodChannel.invokeMethod<int>('stop');
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
-  }
-
-  /// Returns `true` if advertising or false if not advertising
-  Future<bool> get isAdvertising async {
-    return await _methodChannel.invokeMethod<bool>('isAdvertising') ?? false;
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Returns `true` if advertising over BLE is supported
@@ -121,20 +140,21 @@ class FlutterBleCentral {
   }
 
   /// Request Bluetooth permissions
-  Future<BluetoothCentralState> requestPermission() async {
-    final response =
-        await _methodChannel.invokeMethod<int>('requestPermission');
+  Future<CentralBluetoothState> requestPermission() async {
+    final response = await _methodChannel.invokeMethod<int>(
+      'requestPermission',
+    );
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Check if Bluetooth permissions are granted
-  Future<BluetoothCentralState> hasPermission() async {
+  Future<CentralBluetoothState> hasPermission() async {
     final response = await _methodChannel.invokeMethod<int>('hasPermission');
     return response == null
-        ? BluetoothCentralState.unknown
-        : BluetoothCentralState.values[response];
+        ? CentralBluetoothState.unknown
+        : CentralBluetoothState.values[response];
   }
 
   /// Open Bluetooth settings
@@ -149,11 +169,12 @@ class FlutterBleCentral {
 
   /// Returns Stream of MTU updates.
   Stream<ScanResult> get onScanResult {
-    _scanResultTransformer ??=
-        StreamTransformer.fromHandlers(handleData: handleData);
-    _scanResult ??= _scanResultEventChannel
-        .receiveBroadcastStream()
-        .transform(_scanResultTransformer!);
+    _scanResultTransformer ??= StreamTransformer.fromHandlers(
+      handleData: handleData,
+    );
+    _scanResult ??= _scanResultEventChannel.receiveBroadcastStream().transform(
+          _scanResultTransformer!,
+        );
 
     return _scanResult!;
   }
@@ -161,27 +182,413 @@ class FlutterBleCentral {
   /// Returns Stream of MTU updates.
   Stream<int>? get onScanError {
     if (!Platform.isAndroid) return null;
-    _scanResultTransformer ??=
-        StreamTransformer.fromHandlers(handleData: handleData);
-    return _scanError ??= _scanErrorEventChannel
-        .receiveBroadcastStream()
-        .map((dynamic event) => event as int);
+    _scanResultTransformer ??= StreamTransformer.fromHandlers(
+      handleData: handleData,
+    );
+    return _scanError ??= _scanErrorEventChannel.receiveBroadcastStream().map(
+          (dynamic event) => event as int,
+        );
   }
 
   /// Returns Stream of state.
   ///
   /// After listening to this Stream,
   /// you'll be notified about changes in peripheral state.
-  Stream<CentralState> get onPeripheralStateChanged {
-    _centralState ??= _stateChangedEventChannel
-        .receiveBroadcastStream()
-        .map((dynamic event) => CentralState.values[event as int]);
+  Stream<CentralState> get onCentralStateChanged {
+    _centralState ??= _stateChangedEventChannel.receiveBroadcastStream().map(
+          (dynamic event) => CentralState.values[event as int],
+        );
     return _centralState!;
   }
+
+  /// Former name of [onCentralStateChanged].
+  @Deprecated(
+    'Renamed to onCentralStateChanged, this package is central mode. '
+    'Will be removed in the next breaking release.',
+  )
+  Stream<CentralState> get onPeripheralStateChanged => onCentralStateChanged;
 
   /// Returns Stream of MTU updates.
   Stream<dynamic> get onRawScanResult {
     return _scanResultEventChannel.receiveBroadcastStream();
+  }
+
+  /// Returns Stream of connection state changes.
+  ///
+  /// The stream emits maps with 'address' and 'state' keys.
+  Stream<ConnectionStateChange> get onConnectionStateChanged {
+    _connectionState ??=
+        _connectionStateEventChannel.receiveBroadcastStream().map(
+              (dynamic event) => ConnectionStateChange.fromPlatform(
+                event as Map<Object?, Object?>,
+              ),
+            );
+    return _connectionState!;
+  }
+
+  /// Returns a Stream of pairing state changes.
+  ///
+  /// Emits whenever this device starts pairing with a peripheral, finishes, or
+  /// loses the pairing. Android and Windows; Core Bluetooth has no pairing API,
+  /// so nothing is ever published here on Apple.
+  Stream<BondStateChange> get onBondStateChanged {
+    _bondState ??= _bondStateEventChannel.receiveBroadcastStream().map(
+          (dynamic event) =>
+              BondStateChange.fromPlatform(event as Map<Object?, Object?>),
+        );
+    return _bondState!;
+  }
+
+  /// Returns Stream of characteristic value notifications.
+  ///
+  /// The stream emits maps with characteristic data and values.
+  Stream<CharacteristicValue> get onCharacteristicValueChanged {
+    _characteristicValue ??=
+        _characteristicValueEventChannel.receiveBroadcastStream().map(
+              (dynamic event) => CharacteristicValue.fromPlatform(
+                event as Map<Object?, Object?>,
+              ),
+            );
+    return _characteristicValue!;
+  }
+
+  // Connection Management
+
+  /// Connect to a Bluetooth device.
+  ///
+  /// [address] The device address to connect to
+  /// [autoConnect] Whether to automatically connect when device is available
+  /// [timeout] Connection timeout in seconds (default: 15)
+  ///
+  /// Windows ignores [timeout]. It has no explicit connect to give up on: the
+  /// radio is asked to hold the link open and keeps trying until [disconnect].
+  Future<void> connect({
+    required String address,
+    bool autoConnect = false,
+    int timeout = 15,
+  }) async {
+    await _methodChannel.invokeMethod('connect', {
+      'address': address,
+      'autoConnect': autoConnect,
+      'timeout': timeout,
+    });
+  }
+
+  /// Disconnect from a Bluetooth device.
+  ///
+  /// [address] The device address to disconnect from
+  Future<void> disconnect(String address) async {
+    await _methodChannel.invokeMethod('disconnect', {'address': address});
+  }
+
+  /// Get the current connection state of a device.
+  ///
+  /// [address] The device address
+  /// Returns the [GattConnectionState] of the device
+  Future<GattConnectionState> getConnectionState(String address) async {
+    final response = await _methodChannel.invokeMethod<int>(
+      'getConnectionState',
+      {'address': address},
+    );
+    return response == null
+        ? GattConnectionState.disconnected
+        : GattConnectionState.values[response];
+  }
+
+  // Service Discovery
+
+  /// Discover GATT services on a connected device.
+  ///
+  /// [address] The device address
+  /// Returns a list of [GattService] discovered
+  Future<List<GattService>> discoverServices(String address) async {
+    final response = await _methodChannel.invokeMethod<List<Object?>>(
+      'discoverServices',
+      {'address': address},
+    );
+    if (response == null) return [];
+    return response
+        .map(
+          (e) => GattService.fromJson(
+            Map<String, dynamic>.from(e! as Map),
+          ),
+        )
+        .toList();
+  }
+
+  // Characteristic Operations
+
+  /// Read the value of a characteristic.
+  ///
+  /// [address] The device address
+  /// [serviceUuid] The service UUID
+  /// [characteristicUuid] The characteristic UUID
+  /// Returns the characteristic value as [Uint8List]
+  Future<Uint8List> readCharacteristic({
+    required String address,
+    required String serviceUuid,
+    required String characteristicUuid,
+  }) async {
+    final response = await _methodChannel.invokeMethod<List<Object?>>(
+      'readCharacteristic',
+      {
+        'address': address,
+        'serviceUuid': serviceUuid,
+        'characteristicUuid': characteristicUuid,
+      },
+    );
+    if (response == null) return Uint8List(0);
+    return Uint8List.fromList(response.cast<int>());
+  }
+
+  /// Write a value to a characteristic.
+  ///
+  /// [address] The device address
+  /// [serviceUuid] The service UUID
+  /// [characteristicUuid] The characteristic UUID
+  /// [value] The value to write
+  /// [withoutResponse] Whether to write without response
+  Future<void> writeCharacteristic({
+    required String address,
+    required String serviceUuid,
+    required String characteristicUuid,
+    required Uint8List value,
+    bool withoutResponse = false,
+  }) async {
+    await _methodChannel.invokeMethod('writeCharacteristic', {
+      'address': address,
+      'serviceUuid': serviceUuid,
+      'characteristicUuid': characteristicUuid,
+      'value': value,
+      'withoutResponse': withoutResponse,
+    });
+  }
+
+  /// Enable or disable notifications on a characteristic.
+  ///
+  /// [address] The device address
+  /// [serviceUuid] The service UUID
+  /// [characteristicUuid] The characteristic UUID
+  /// [enable] Whether to enable or disable notifications
+  Future<void> setCharacteristicNotification({
+    required String address,
+    required String serviceUuid,
+    required String characteristicUuid,
+    required bool enable,
+  }) async {
+    await _methodChannel.invokeMethod('setCharacteristicNotification', {
+      'address': address,
+      'serviceUuid': serviceUuid,
+      'characteristicUuid': characteristicUuid,
+      'enable': enable,
+    });
+  }
+
+  // Descriptor Operations
+
+  /// Read the value of a descriptor.
+  ///
+  /// [address] The device address
+  /// [serviceUuid] The service UUID
+  /// [characteristicUuid] The characteristic UUID
+  /// [descriptorUuid] The descriptor UUID
+  /// Returns the descriptor value as [Uint8List]
+  Future<Uint8List> readDescriptor({
+    required String address,
+    required String serviceUuid,
+    required String characteristicUuid,
+    required String descriptorUuid,
+  }) async {
+    final response = await _methodChannel.invokeMethod<List<Object?>>(
+      'readDescriptor',
+      {
+        'address': address,
+        'serviceUuid': serviceUuid,
+        'characteristicUuid': characteristicUuid,
+        'descriptorUuid': descriptorUuid,
+      },
+    );
+    if (response == null) return Uint8List(0);
+    return Uint8List.fromList(response.cast<int>());
+  }
+
+  /// Write a value to a descriptor.
+  ///
+  /// [address] The device address
+  /// [serviceUuid] The service UUID
+  /// [characteristicUuid] The characteristic UUID
+  /// [descriptorUuid] The descriptor UUID
+  /// [value] The value to write
+  Future<void> writeDescriptor({
+    required String address,
+    required String serviceUuid,
+    required String characteristicUuid,
+    required String descriptorUuid,
+    required Uint8List value,
+  }) async {
+    await _methodChannel.invokeMethod('writeDescriptor', {
+      'address': address,
+      'serviceUuid': serviceUuid,
+      'characteristicUuid': characteristicUuid,
+      'descriptorUuid': descriptorUuid,
+      'value': value,
+    });
+  }
+
+  /// Request a specific MTU size.
+  ///
+  /// [address] The device address
+  /// [mtu] The requested MTU size
+  /// Returns the negotiated MTU size
+  ///
+  /// On Apple and Windows [mtu] is ignored: the radio negotiates the size
+  /// itself, and the one it settled on is what comes back.
+  Future<int> requestMtu({
+    required String address,
+    required int mtu,
+  }) async {
+    final response = await _methodChannel.invokeMethod<int>(
+      'requestMtu',
+      {
+        'address': address,
+        'mtu': mtu,
+      },
+    );
+    return response ?? 23; // Default MTU
+  }
+
+  /// Read the RSSI of a connected device.
+  ///
+  /// Android and Apple; Windows throws a [PlatformException] with code
+  /// `unsupported`.
+  ///
+  /// [address] The device address
+  /// Returns the RSSI value
+  Future<int> readRssi(String address) async {
+    final response = await _methodChannel.invokeMethod<int>(
+      'readRssi',
+      {'address': address},
+    );
+    return response ?? 0;
+  }
+
+  // Pairing
+
+  /// Starts pairing with a peripheral.
+  ///
+  /// Returns as soon as the request is in; the outcome arrives on
+  /// [onBondStateChanged], since pairing usually needs the user to confirm it.
+  ///
+  /// Android and Windows. Windows accepts only the ceremony that needs no
+  /// passkey; one that asks for anything else is refused, and the refusal
+  /// arrives on [onBondStateChanged] as [BondState.none]. Apple throws a
+  /// [PlatformException] with code `unsupported`; Core Bluetooth pairs on its
+  /// own when a peripheral asks for it.
+  Future<void> createBond(String address) async {
+    await _methodChannel.invokeMethod('createBond', {'address': address});
+  }
+
+  /// Removes the pairing with a peripheral.
+  ///
+  /// Android and Windows. On Android it uses a hidden platform API, so it may
+  /// fail on some devices. Apple throws a [PlatformException] with code
+  /// `unsupported`.
+  Future<void> removeBond(String address) async {
+    await _methodChannel.invokeMethod('removeBond', {'address': address});
+  }
+
+  /// Whether this device is paired with a peripheral. Android only; Apple and
+  /// Windows throw a [PlatformException] with code `unsupported`.
+  Future<BondState> getBondState(String address) async {
+    final response = await _methodChannel.invokeMethod<int>(
+      'getBondState',
+      {'address': address},
+    );
+    return BondState.fromValue(response ?? BondState.none.value);
+  }
+
+  // Connection tuning
+
+  /// Asks for a connection interval suited to [priority].
+  ///
+  /// A shorter interval means lower latency and higher throughput at the cost
+  /// of power. The peripheral has the final say. Android only; Apple and
+  /// Windows throw a [PlatformException] with code `unsupported`.
+  Future<void> requestConnectionPriority({
+    required String address,
+    required ConnectionPriority priority,
+  }) async {
+    await _methodChannel.invokeMethod('requestConnectionPriority', {
+      'address': address,
+      'priority': priority.value,
+    });
+  }
+
+  /// The physical layer the connection is running on.
+  ///
+  /// Android 8.0 and above only.
+  Future<({GattPhy tx, GattPhy rx})> readPhy(String address) async {
+    final response = await _methodChannel.invokeMethod<Map<Object?, Object?>>(
+      'readPhy',
+      {'address': address},
+    );
+    return (
+      tx: GattPhy.fromValue(response?['txPhy'] as int? ?? GattPhy.le1M.value),
+      rx: GattPhy.fromValue(response?['rxPhy'] as int? ?? GattPhy.le1M.value),
+    );
+  }
+
+  /// Asks to move the connection onto [txPhy] and [rxPhy].
+  ///
+  /// [phyOption] only applies to [GattPhy.leCoded]. Returns as soon as the
+  /// request is in; read it back with [readPhy] to see what was agreed, since
+  /// the peripheral and the controller both have a say. Android 8.0 and above
+  /// only.
+  Future<void> setPreferredPhy({
+    required String address,
+    required GattPhy txPhy,
+    required GattPhy rxPhy,
+    PhyOption phyOption = PhyOption.noPreferred,
+  }) async {
+    await _methodChannel.invokeMethod('setPreferredPhy', {
+      'address': address,
+      'txPhy': txPhy.value,
+      'rxPhy': rxPhy.value,
+      'phyOptions': phyOption.value,
+    });
+  }
+
+  // Reliable write
+
+  /// Opens a reliable write transaction.
+  ///
+  /// Writes made after this are queued on the peripheral and echoed back for
+  /// verification rather than applied, until [executeReliableWrite] commits
+  /// them or [abortReliableWrite] drops them. Android only; Apple and Windows
+  /// throw a [PlatformException] with code `unsupported`.
+  Future<void> beginReliableWrite(String address) async {
+    await _methodChannel.invokeMethod(
+      'beginReliableWrite',
+      {'address': address},
+    );
+  }
+
+  /// Commits the writes queued since [beginReliableWrite]. Android only; Apple
+  /// and Windows throw a [PlatformException] with code `unsupported`.
+  Future<void> executeReliableWrite(String address) async {
+    await _methodChannel.invokeMethod(
+      'executeReliableWrite',
+      {'address': address},
+    );
+  }
+
+  /// Drops the writes queued since [beginReliableWrite]. Android only; Apple
+  /// and Windows throw a [PlatformException] with code `unsupported`.
+  Future<void> abortReliableWrite(String address) async {
+    await _methodChannel.invokeMethod(
+      'abortReliableWrite',
+      {'address': address},
+    );
   }
 
   /// Parses the received data.
@@ -228,9 +635,7 @@ class FlutterBleCentral {
         'serviceUuids': raw['serviceUuids'] ?? <String>[],
       };
 
-      raw['device'] = {
-        'address': raw['address'] ?? '',
-      };
+      raw['device'] = {'address': raw['address'] ?? ''};
 
       result = ScanResult.fromPlatform(raw);
     } else {

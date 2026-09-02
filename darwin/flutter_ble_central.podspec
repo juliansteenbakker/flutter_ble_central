@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_ble_central'
-  s.version          = '0.2.0'
+  s.version          = '0.3.3'
   s.summary          = 'A Flutter package for scanning BLE data in central mode.'
   s.description      = <<-DESC
 A Flutter package for scanning BLE data in central mode.
@@ -17,7 +17,7 @@ A Flutter package for scanning BLE data in central mode.
   s.ios.dependency 'Flutter'
   s.osx.dependency 'FlutterMacOS'
   s.ios.deployment_target = '13.0'
-  s.osx.deployment_target = '10.14'
+  s.osx.deployment_target = '10.15'
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
   s.swift_version = '5.0'

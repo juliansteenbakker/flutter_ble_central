@@ -4,3 +4,17 @@ analyzer:
   exclude:
     - '**/*.g.dart'
     - '**/*.freezed.dart'
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+
+linter:
+  rules:
+    # The renamed state enum and stream getter are deliberately deprecated for
+    # one breaking release, so 0.x call sites get a warning before the old names
+    # disappear rather than a compile error on upgrade.
+    remove_deprecations_in_breaking_versions: false

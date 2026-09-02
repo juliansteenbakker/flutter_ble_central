@@ -20,11 +20,19 @@
 #include <flutter/standard_method_codec.h>
 #include <flutter/standard_message_codec.h>
 
+#include "gatt_connection_manager.h"
+
+#include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
 
 namespace flutter_ble_central {
 
@@ -70,17 +78,73 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
 
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> scan_result_sink_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> state_changed_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> connection_state_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> characteristic_value_sink_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> bond_state_sink_;
+
+  // Serves the GATT client half. Created once the plugin is up, so that it can
+  // be handed the apartment this plugin was registered on.
+  std::unique_ptr<GattConnectionManager> gatt_;
+
+  // Whether a method belongs to the GATT client half.
+  static bool IsConnectionMethod(const std::string& method);
+
+  // Reads what a connection method needs out of the arguments and hands it to
+  // the manager, or answers with an error when Dart sent something unusable.
+  void HandleConnectionMethod(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Reports a method Windows has no way to serve, rather than letting it fall
+  // through to a missing-plugin failure.
+  void ReportUnsupported(
+      const std::string& method,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
   Radio bluetoothRadio{ nullptr };
   winrt::event_token radioStateChangedToken;
+
+  // Runs work that needs the adapter, once InitializeAsync has looked it up.
+  // A call arriving before that would read a null radio and report the adapter
+  // missing when it is only late, so it waits here instead of answering wrong.
+  void WhenRadioReady(std::function<void()> work);
+
+  // Whether InitializeAsync has finished. Both this and the queue are only
+  // touched on the UI thread, so neither needs a lock.
+  bool radio_looked_up_ = false;
+  std::vector<std::function<void()>> waiting_on_radio_;
 
   // UI thread context for dispatching callbacks to Flutter
   winrt::apartment_context ui_thread_;
 
   BluetoothLEAdvertisementWatcher bluetoothLEWatcher{ nullptr };
   winrt::event_token bluetoothLEWatcherReceivedToken;
+  winrt::event_token bluetoothLEWatcherStoppedToken;
   winrt::fire_and_forget BluetoothLEWatcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args);
   void BluetoothLEWatcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args);
+
+  // What one peripheral has said so far.
+  //
+  // A watcher raises Received once per packet, and a peripheral splits what it
+  // broadcasts across two of them: the advertisement carries the service uuids
+  // and the scan response carries the local name, or the other way round.
+  // Reporting each packet on its own would have every field arrive alone and
+  // blank out what the packet before it carried, so they are folded together
+  // here and the whole of what the peripheral has said is reported each time.
+  // That is what Android and Core Bluetooth hand their callers, and what a
+  // caller keying on the address expects.
+  struct SeenPeripheral {
+    std::optional<std::string> name;
+    flutter::EncodableList service_uuids;
+    std::vector<uint8_t> manufacturer_data;
+    uint16_t manufacturer_id = 0;
+  };
+
+  // Keyed by Bluetooth address, and only touched on the UI thread, after the
+  // received handler has switched to it, so it needs no lock. Cleared when a
+  // scan starts or stops: an address does not name the same peripheral across
+  // scans, since Android and Apple both rotate theirs.
+  std::map<uint64_t, SeenPeripheral> seen_peripherals_;
 
   // State changed event channel handlers
   std::unique_ptr<flutter::StreamHandlerError<>> OnStateListenInternal(
@@ -89,9 +153,25 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
   std::unique_ptr<flutter::StreamHandlerError<>> OnStateCancelInternal(
       const flutter::EncodableValue* arguments);
 
-  void OnRadioStateChanged(Radio sender, IInspectable args);
+  winrt::fire_and_forget OnRadioStateChanged(Radio sender, IInspectable args);
+
+  // Publishes a state unless it is the one already reported, and remembers it
+  // for a listener attaching later. Must be called on the UI thread.
   void PublishState(int state);
+
+  // Hands the current state to a listener that just attached.
+  void SendCurrentState();
+
   int GetCurrentState();
+
+  // The last state published. Until InitializeAsync has looked the adapter up
+  // there is nothing to report on, so it starts out unknown rather than
+  // claiming the adapter is unsupported.
+  int central_state_ = 0;
+
+  // Cleared when the plugin is destroyed, so that a coroutine resuming after
+  // the fact does not touch it.
+  std::shared_ptr<std::atomic_bool> alive_ = std::make_shared<std::atomic_bool>(true);
 
   winrt::fire_and_forget EnableBluetoothAsync(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);

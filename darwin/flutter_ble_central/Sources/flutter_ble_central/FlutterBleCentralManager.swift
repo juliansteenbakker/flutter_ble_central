@@ -43,16 +43,35 @@ final class FlutterBleCentralManager {
     /// Map of discovered peripherals by their `UUID`.
     private(set) var activePeripherals = [PeripheralID: CBPeripheral]()
 
+    /// Serves the GATT client half: connections, discovery, reads and writes.
+    /// Built in `init`, after the central manager it works through.
+    private(set) var gatt: GattConnectionManager!
+
+    /// Queue CoreBluetooth delivers its callbacks on.
+    ///
+    /// Deliberately not the main queue: with duplicates allowed, every advertising
+    /// event is reported and parsed, which would otherwise compete with the Flutter
+    /// UI. Serial, to keep CoreBluetooth's callback ordering; only the
+    /// `FlutterEventSink` call hops back to main, as required for Flutter channels.
+    private let callbackQueue = DispatchQueue(
+        label: "dev.steenbakker.flutter_ble_central.callback",
+        qos: .userInitiated
+    )
+
     /**
      Initializes the BLE Central Manager.
 
      - Parameters:
        - scanResultHandler: Handler that publishes scan results to Flutter.
        - stateChangedHandler: Handler that publishes state changes to Flutter.
+       - connectionStateHandler: Handler that publishes connection state changes.
+       - characteristicValueHandler: Handler that publishes notified values.
      */
     init(
         scanResultHandler: ScanResultHandler,
-        stateChangedHandler: StateChangedHandler
+        stateChangedHandler: StateChangedHandler,
+        connectionStateHandler: ConnectionEventHandler,
+        characteristicValueHandler: ConnectionEventHandler
     ) {
         self.centralManagerDelegate = CentralManagerDelegate(
             onStateChange: { state in
@@ -69,8 +88,27 @@ final class FlutterBleCentralManager {
 
         self.centralManager = CBCentralManager(
             delegate: self.centralManagerDelegate,
-            queue: nil
+            queue: callbackQueue
         )
+
+        // Built after the central manager, since it needs it, and wired into the
+        // delegate afterwards for the same reason. Each of these arrives on
+        // `callbackQueue`, which is where the GATT manager keeps its state.
+        self.gatt = GattConnectionManager(
+            centralManager: centralManager,
+            queue: callbackQueue,
+            connectionStateHandler: connectionStateHandler,
+            characteristicValueHandler: characteristicValueHandler
+        )
+        centralManagerDelegate.onConnect = { [weak self] peripheral, _ in
+            self?.gatt.handleDidConnect(peripheral)
+        }
+        centralManagerDelegate.onConnectFailed = { [weak self] peripheral, error in
+            self?.gatt.handleDidFailToConnect(peripheral, error: error)
+        }
+        centralManagerDelegate.onDisconnect = { [weak self] peripheral, error in
+            self?.gatt.handleDidDisconnect(peripheral, error: error)
+        }
     }
 
     /**
@@ -104,8 +142,8 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the current authorization status.
      */
-    var permissionState: FlutterBleBluetoothState {
-        if #available(iOS 13.1, *) {
+    var permissionState: CentralBluetoothState {
+        if #available(iOS 13.1, macOS 10.15, *) {
             switch CBCentralManager.authorization {
             case .allowedAlways:
                 return .Granted
@@ -150,7 +188,7 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the current adapter state.
      */
-    var bluetoothState: FlutterBleBluetoothState {
+    var bluetoothState: CentralBluetoothState {
         switch centralManager.state {
         case .poweredOn:
             return .Ready
@@ -178,7 +216,7 @@ final class FlutterBleCentralManager {
 
      - Returns: A `CentralState` representing the overall readiness state.
      */
-    func getCombinedState() -> FlutterBleBluetoothState {
+    func getCombinedState() -> CentralBluetoothState {
         // First check permissions
         let permState = permissionState
         if permState != .Granted {
@@ -194,7 +232,7 @@ final class FlutterBleCentralManager {
 
      - Parameter completion: Called with the resulting `CentralState`.
      */
-    func requestPermission(completion: @escaping (FlutterBleBluetoothState) -> Void) {
+    func requestPermission(completion: @escaping (CentralBluetoothState) -> Void) {
         switch permissionState {
         case .Denied:
             // Trigger the system dialog if status is notDetermined
