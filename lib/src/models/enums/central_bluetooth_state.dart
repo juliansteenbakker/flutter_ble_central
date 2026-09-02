@@ -41,3 +41,10 @@ enum CentralBluetoothState {
   /// Bluetooth is ready to use
   ready,
 }
+
+/// Former name of [CentralBluetoothState].
+@Deprecated(
+  'Renamed to CentralBluetoothState so it no longer collides with the '
+  'peripheral package. Will be removed in the next breaking release.',
+)
+typedef BluetoothCentralState = CentralBluetoothState;

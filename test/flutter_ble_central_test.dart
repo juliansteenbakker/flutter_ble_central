@@ -494,4 +494,22 @@ void main() {
       skip: !isApple,
     );
   });
+
+  group('deprecated aliases', () {
+    test('BluetoothCentralState resolves to CentralBluetoothState', () {
+      // Exercising the deprecated alias is the point of this test.
+      // ignore: deprecated_member_use_from_same_package
+      const state = BluetoothCentralState.ready;
+      expect(state, CentralBluetoothState.ready);
+    });
+
+    test('onPeripheralStateChanged forwards to onCentralStateChanged', () {
+      expect(
+        // Exercising the deprecated alias is the point of this test.
+        // ignore: deprecated_member_use_from_same_package
+        ble.onPeripheralStateChanged,
+        same(ble.onCentralStateChanged),
+      );
+    });
+  });
 }
