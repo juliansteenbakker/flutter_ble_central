@@ -201,6 +201,13 @@ class FlutterBleCentral {
     return _centralState!;
   }
 
+  /// Former name of [onCentralStateChanged].
+  @Deprecated(
+    'Renamed to onCentralStateChanged, this package is central mode. '
+    'Will be removed in the next breaking release.',
+  )
+  Stream<CentralState> get onPeripheralStateChanged => onCentralStateChanged;
+
   /// Returns Stream of MTU updates.
   Stream<dynamic> get onRawScanResult {
     return _scanResultEventChannel.receiveBroadcastStream();

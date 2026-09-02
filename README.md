@@ -23,6 +23,8 @@ as `ScanResult`s. For the other direction, see
 flutter pub add flutter_ble_central
 ```
 
+Upgrading from 0.3.x? See [MIGRATION.md](MIGRATION.md).
+
 ## Platform setup
 
 ### Android
