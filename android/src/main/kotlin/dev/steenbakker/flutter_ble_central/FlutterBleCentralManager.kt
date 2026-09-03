@@ -258,6 +258,56 @@ class FlutterBleCentralManager(context: Context) {
   }
 
   /**
+   * Attempts to enable Bluetooth without an activity to ask through.
+   *
+   * Only the programmatic path is available here, which Android 13 removed, so from
+   * a service on Tiramisu and above the adapter has to already be on.
+   *
+   * @return Whether Bluetooth is on now.
+   */
+  fun enableBluetooth(): Boolean {
+    if (isBluetoothEnabled()) return true
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return false
+    @Suppress("DEPRECATION")
+    mBluetoothManager?.adapter?.enable()
+    return isBluetoothEnabled()
+  }
+
+  /**
+   * Ensures Bluetooth is ready without an activity to ask through, which is the
+   * position a foreground service or any other background isolate is in.
+   *
+   * Nothing can be asked for here: a service cannot show the permission dialog or
+   * the enable-Bluetooth dialog, so what is already granted and already on is all
+   * there is. Scanning and connecting themselves need no activity, so a service
+   * started from a screen which took care of permissions can run on its own.
+   */
+  fun ensureBluetoothReady(
+    context: Context,
+    onReady: () -> Unit,
+    onError: (CentralBluetoothState) -> Unit
+  ) {
+    if (getBluetoothState() == CentralBluetoothState.Unsupported) {
+      onError(CentralBluetoothState.Unsupported)
+      return
+    }
+
+    // Nothing to fall back on: without an activity the permissions cannot be asked
+    // for, only reported.
+    if (!hasRequiredPermissions(context)) {
+      onError(CentralBluetoothState.Denied)
+      return
+    }
+
+    if (!enableBluetooth()) {
+      onError(CentralBluetoothState.TurnedOff)
+      return
+    }
+
+    onReady()
+  }
+
+  /**
    * Ensures Bluetooth is ready before performing BLE operations.
    *
    * - Checks adapter support

@@ -753,18 +753,43 @@ class GattConnectionManager(
         }
     }
 
+    /**
+     * Parses a uuid Dart sent into a [UUID].
+     *
+     * Accepts the 16 bit ("2A37"), 32 bit ("A1B2C3D4") and 128 bit forms, with or
+     * without dashes, the way the Apple and Windows implementations do. Android
+     * reports the expanded form for everything it discovers, so a short form has to
+     * be expanded onto the Bluetooth Base UUID before it can match anything.
+     *
+     * @return The parsed uuid, or null when it is not one.
+     */
+    private fun parseUuid(value: String): UUID? {
+        val hex = value.replace("-", "")
+        if (!hex.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) return null
+        val full = when (hex.length) {
+            4 -> "0000$hex-0000-1000-8000-00805F9B34FB"
+            8 -> "$hex-0000-1000-8000-00805F9B34FB"
+            32 -> "${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-" +
+                    "${hex.substring(16, 20)}-${hex.substring(20)}"
+            else -> return null
+        }
+        return try {
+            UUID.fromString(full)
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
     private fun getCharacteristic(
         address: String,
         serviceUuid: String,
         characteristicUuid: String
     ): BluetoothGattCharacteristic? {
         val services = discoveredServices[address] ?: return null
-        val service = services.find {
-            it.uuid.toString().equals(serviceUuid, ignoreCase = true)
-        } ?: return null
-        return service.characteristics.find {
-            it.uuid.toString().equals(characteristicUuid, ignoreCase = true)
-        }
+        val wantedService = parseUuid(serviceUuid) ?: return null
+        val wantedCharacteristic = parseUuid(characteristicUuid) ?: return null
+        val service = services.find { it.uuid == wantedService } ?: return null
+        return service.characteristics.find { it.uuid == wantedCharacteristic }
     }
 
     private fun getDescriptor(
@@ -774,9 +799,8 @@ class GattConnectionManager(
         descriptorUuid: String
     ): BluetoothGattDescriptor? {
         val characteristic = getCharacteristic(address, serviceUuid, characteristicUuid) ?: return null
-        return characteristic.descriptors.find {
-            it.uuid.toString().equals(descriptorUuid, ignoreCase = true)
-        }
+        val wanted = parseUuid(descriptorUuid) ?: return null
+        return characteristic.descriptors.find { it.uuid == wanted }
     }
 
     private fun serializeServices(services: List<BluetoothGattService>): List<Map<String, Any>> {
