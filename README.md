@@ -78,8 +78,8 @@ On macOS, also tick the Bluetooth entitlement in **both**
 <true/>
 ```
 
-To keep scanning, and stay connected, once the app is no longer in front, add the
-background mode to `ios/Runner/Info.plist`:
+To stay connected once the app is no longer in front, add the background mode to
+`ios/Runner/Info.plist`:
 
 ```xml
 <key>UIBackgroundModes</key>
@@ -89,9 +89,9 @@ background mode to `ios/Runner/Info.plist`:
 ```
 
 Without it iOS stops the scan and drops the connections when the app leaves the
-foreground. What it does to the scan that keeps running, and what the plugin does with
-the key beyond that, is under [Background scanning](#background-scanning). macOS has no
-background modes, and keeps scanning for as long as the app runs.
+foreground. What survives with it, and what does not, is under
+[Background scanning](#background-scanning). macOS has no background modes, and keeps
+scanning for as long as the app runs.
 
 ### Windows
 
@@ -307,22 +307,26 @@ controller agreed on. PHY control needs Android 8.0.
 
 On Android a scan and its connections belong to the process, so both keep running while
 the app sits in the background and end when the system kills the process. Starting one
-from a service rather than from an activity is not supported: `startScan()` needs an
+from a service rather than from an activity is not supported: `start()` needs an
 activity to check permissions against, and answers with a `No activity` error without
 one, so the scan has to be started while the app is in front.
 
 On iOS everything stops with the foreground unless the app declares the
-`bluetooth-central` background mode. With it, Core Bluetooth keeps scanning and keeps
-the connections, but the scan is not the one that was asked for:
+`bluetooth-central` background mode, and even with it a connection and a scan fare
+differently.
 
-- A background scan must name the services it wants. `startScan()` with no service
-  filter reports nothing at all once the app is in the background, which is the usual
-  reason background scanning looks broken.
-- `allowDuplicates` is ignored, so `onScanResult` fires once per peripheral per scan
-  window rather than on every advertisement, and what it carries is merged across
-  them. Anything that counts advertisements or tracks RSSI over time sees a fraction of
-  what it does in the foreground.
-- The scan runs at the system's convenience, so discovery takes longer.
+A connection survives. Core Bluetooth keeps it open, goes on delivering notifications,
+and can relaunch the app to hand it back, which is what the background mode is worth
+here today.
+
+A scan does not, and this package cannot yet make it. iOS reports a backgrounded scan's
+results only for peripherals matching the service uuids that scan named, and
+`ScanSettings` has no service filter to name them with, so a scan carries on being
+delivered while the app is in front and goes quiet when it is not. Two more rules apply
+once a filter exists: `allowDuplicates` is ignored in the background, so results arrive
+once per peripheral per scan window with their advertisements merged rather than on
+every advertisement, and the scan runs at the system's convenience, so discovery takes
+longer.
 
 Declaring the background mode also lets the plugin register a restore identifier with
 Core Bluetooth, which is what allows iOS to relaunch the app into the background and
