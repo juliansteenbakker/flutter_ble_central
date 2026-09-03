@@ -12,6 +12,18 @@
 // `example/lib/interop_harness.dart` on the second, and reads the `HARNESS|`
 // lines both print.
 //
+// The peripheral serves three characteristics: the Nordic UART pair and one
+// that is readable, writable and notifying at once, declared with a 16 bit
+// uuid. Between them the run covers a filtered scan and what a filter leaves
+// out, discovery of a layout larger than a pair, a short uuid resolving to the
+// same characteristic as its long form, and an echo coming back on the
+// characteristic it was written to rather than on whichever one notifies.
+//
+// What it cannot cover, since a scripted run cannot background or kill an app
+// and go on talking to it: background scanning and advertising, the state
+// restoration that hands a relaunched app its connection or advertisement back,
+// and running with no activity attached. Those stay manual.
+//
 // Options:
 //   --peripheral <id>   Skip the first prompt and use this device.
 //   --central <id>      Skip the second prompt and use this device.
@@ -337,6 +349,11 @@ class _Run {
     switch (kind) {
       case 'READY':
         if (!ready.isCompleted) ready.complete(true);
+      case 'LAYOUT':
+        // What the peripheral says it serves, printed before the run so a
+        // failing discovery check can be read against it.
+        stdout.writeln('  peripheral serves ${fields.length} '
+            'characteristics: ${fields.join(', ')}');
       case 'FATAL':
         stderr.writeln('Peripheral: ${fields.join(' ')}');
         if (!ready.isCompleted) ready.complete(false);
