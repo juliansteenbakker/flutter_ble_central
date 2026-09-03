@@ -72,6 +72,13 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
             characteristicValueHandler: characteristicValueHandler
         )
         super.init()
+
+        // A connection that survived a background relaunch was restored before Dart
+        // was up, and connection state is only published when it changes, so a new
+        // listener is told what is currently held.
+        connectionStateHandler.onSubscribe = { [weak self] in
+            self?.flutterBleCentralManager.gatt.republishConnectionStates()
+        }
     }
     
     /**
@@ -375,13 +382,13 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
 
      - Parameter result: The Flutter result callback used to send back the operation state.
      */
-    private func startScan(_ result: @escaping FlutterResult) {
+    private func startScan(_ result: @escaping FlutterResult, services: [CBUUID]? = nil) {
         // Check combined state (permissions + Bluetooth adapter state)
         let state = flutterBleCentralManager.getCombinedState()
 
         // Only start scanning if Bluetooth is ready
         if state == .Ready || state == .Granted {
-            flutterBleCentralManager.startScan(with: nil)
+            flutterBleCentralManager.startScan(with: services)
             result(CentralBluetoothState.Ready.rawValue)
         } else {
             // Return the error state (TurnedOff, Denied, Unsupported, etc.)
@@ -397,11 +404,33 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
        - result: The Flutter result callback used to send back the operation state.
      */
     private func startScan(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        if let arguments = call.arguments as? [String: Any],
-           let enableTimingStats = arguments["enableTimingStats"] as? Bool {
+        let arguments = call.arguments as? [String: Any]
+        if let enableTimingStats = arguments?["enableTimingStats"] as? Bool {
             scanResultHandler.setEnableTimingStats(enableTimingStats)
         }
-        startScan(result)
+
+        // A filtered scan only reports peripherals advertising one of these
+        // services. Core Bluetooth needs them for a background scan in
+        // particular: without them it reports nothing once the app is not in
+        // front, whatever the background mode says.
+        var services: [CBUUID]?
+        if let wanted = arguments?["serviceUuids"] as? [String], !wanted.isEmpty {
+            var parsed: [CBUUID] = []
+            for uuid in wanted {
+                guard let value = GattConnectionManager.parseUuid(uuid) else {
+                    result(FlutterError(
+                        code: "INVALID_ARGUMENT",
+                        message: "\(uuid) is not a service uuid",
+                        details: nil
+                    ))
+                    return
+                }
+                parsed.append(value)
+            }
+            services = parsed
+        }
+
+        startScan(result, services: services)
     }
     
     /**

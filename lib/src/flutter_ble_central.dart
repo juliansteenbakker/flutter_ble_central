@@ -90,9 +90,26 @@ class FlutterBleCentral {
   Stream<BondStateChange>? _bondState;
 
   /// Start scanning. Takes [ScanSettings] as an input.
-  Future<CentralBluetoothState> start({ScanSettings? scanSettings}) async {
+  ///
+  /// [serviceUuids] limits the scan to peripherals advertising at least one of
+  /// those services, given in the 16 bit (`'180d'`), 32 bit or 128 bit form. It
+  /// is what iOS needs to report anything from a scan while the app is in the
+  /// background: without it Core Bluetooth reports nothing there, whatever the
+  /// `bluetooth-central` background mode says. On Windows the match is made in
+  /// the plugin rather than by the radio.
+  Future<CentralBluetoothState> start({
+    ScanSettings? scanSettings,
+    List<String>? serviceUuids,
+  }) async {
     final settings = (scanSettings ?? ScanSettings()).toJson();
     settings['enableTimingStats'] = enableTimingStats;
+
+    if (serviceUuids != null && serviceUuids.isNotEmpty) {
+      if (serviceUuids.any((uuid) => uuid.trim().isEmpty)) {
+        throw ArgumentError('A scan service uuid cannot be empty.');
+      }
+      settings['serviceUuids'] = serviceUuids;
+    }
 
     if (Platform.isWindows) {
       try {

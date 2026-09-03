@@ -146,6 +146,15 @@ class FlutterBleCentralPlugin : public flutter::Plugin, public flutter::StreamHa
   // scans, since Android and Apple both rotate theirs.
   std::map<uint64_t, SeenPeripheral> seen_peripherals_;
 
+  // The service uuids a filtered scan reports, in the canonical 128 bit form.
+  // Empty means every peripheral is reported.
+  //
+  // Matched in this plugin rather than through the watcher's own
+  // BluetoothLEAdvertisementFilter: that filter requires an advertisement to
+  // carry everything it names, where Android and Apple report a peripheral that
+  // carries any one of the uuids asked for.
+  std::vector<std::string> scan_service_uuids_;
+
   // State changed event channel handlers
   std::unique_ptr<flutter::StreamHandlerError<>> OnStateListenInternal(
       const flutter::EncodableValue* arguments,

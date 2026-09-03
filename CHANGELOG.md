@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/juliansteenbakker/flutter_ble_central/compare/v1.0.0...v1.1.0) (2026-09-03)
+
+
+### Features
+
+* **apple:** restore connections after a background relaunch ([31a668e](https://github.com/juliansteenbakker/flutter_ble_central/commit/31a668ee0f6134800d7387101ed6237acbc65ae5))
+* **apple:** restore connections after a background relaunch ([ae26f30](https://github.com/juliansteenbakker/flutter_ble_central/commit/ae26f303caeefdcf0b926f24f322cbb62267def3))
+* filter a scan by service uuid ([#138](https://github.com/juliansteenbakker/flutter_ble_central/issues/138)) ([86554ad](https://github.com/juliansteenbakker/flutter_ble_central/commit/86554adbce3182e0c8f7497decbdb400adb62446))
+
+
+### Bug Fixes
+
+* **android:** file a read under the uuid its callback reports ([#140](https://github.com/juliansteenbakker/flutter_ble_central/issues/140)) ([ddccc8d](https://github.com/juliansteenbakker/flutter_ble_central/commit/ddccc8de274d5a41340cada5f3d5221d01e2d942))
+* **android:** key a read by the uuid its callback reports ([#141](https://github.com/juliansteenbakker/flutter_ble_central/issues/141)) ([2a1f246](https://github.com/juliansteenbakker/flutter_ble_central/commit/2a1f246f4ffc03747845c36911ad9c7000dff7fc))
+* **android:** match short uuids and run without an activity ([#136](https://github.com/juliansteenbakker/flutter_ble_central/issues/136)) ([d82dbe9](https://github.com/juliansteenbakker/flutter_ble_central/commit/d82dbe9fa3a27993fbe9ef1bffe0a0e7d9663a62))
+
 ## [1.0.0](https://github.com/juliansteenbakker/flutter_ble_central/compare/v0.3.3...v1.0.0) (2026-09-02)
 
 

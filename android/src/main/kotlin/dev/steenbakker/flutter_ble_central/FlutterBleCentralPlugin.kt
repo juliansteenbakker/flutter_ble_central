@@ -5,7 +5,9 @@ import android.app.Activity
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanSettings
+import android.os.ParcelUuid
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -127,6 +129,9 @@ class FlutterBleCentralPlugin :
   /** Stored scan settings for restarting the scan */
   private var currentScanSettings: ScanSettings? = null
 
+  /** The filters the running scan was started with, so a refresh keeps them. */
+  private var currentScanFilters: List<ScanFilter>? = null
+
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     methodChannel = MethodChannel(
       flutterPluginBinding.binaryMessenger,
@@ -239,21 +244,20 @@ class FlutterBleCentralPlugin :
     }
 
     val manager = flutterBleCentralManager!!
-
-    if (activityBinding == null) {
-      result.error("No activity", "Activity is not attached", null)
-      return
+    val onReady = { startScan(call, result) }
+    val onError = { state: CentralBluetoothState ->
+      safeResult(result) { result.success(state.ordinal) }
     }
 
-    manager.ensureBluetoothReady(
-      activityBinding!!.activity,
-      onReady = {
-        startScan(call, result)
-      },
-      onError = { state ->
-        safeResult(result) { result.success(state.ordinal) }
-      }
-    )
+    // Without an activity nothing can be asked of the user, but scanning and
+    // connecting do not need one, so a service whose permissions are already
+    // granted starts rather than being turned away.
+    val activity = activityBinding?.activity
+    if (activity == null) {
+      manager.ensureBluetoothReady(context!!, onReady, onError)
+    } else {
+      manager.ensureBluetoothReady(activity, onReady, onError)
+    }
   }
 
   /**
@@ -297,12 +301,23 @@ class FlutterBleCentralPlugin :
     val enableTimingStats = (arguments["enableTimingStats"] as Boolean?) ?: true
     scanResultHandler.setEnableTimingStats(enableTimingStats)
 
+    // A filtered scan only reports peripherals advertising one of these services,
+    // which is also what iOS needs to report anything at all in the background.
+    val filters = (arguments["serviceUuids"] as List<*>?)?.map { value ->
+      val uuid = value as? String
+        ?: throw IllegalArgumentException("A scan service uuid must be a string")
+      val parsed = parseUuid(uuid)
+        ?: throw IllegalArgumentException("Invalid service uuid: $uuid")
+      ScanFilter.Builder().setServiceUuid(ParcelUuid(parsed)).build()
+    }
+
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
 
     try {
       val builtSettings = scanSettings.build()
       currentScanSettings = builtSettings
-      flutterBleCentralManager?.startScan(builtSettings, scanCallback!!)
+      currentScanFilters = filters
+      flutterBleCentralManager?.startScan(filters, builtSettings, scanCallback!!)
 
       // Schedule scan refresh after 4 minutes (240,000 milliseconds)
       scheduleScanRefresh()
@@ -356,8 +371,8 @@ class FlutterBleCentralPlugin :
         // Stop the current scan
         flutterBleCentralManager?.stopScan(callback)
 
-        // Restart the scan with the same settings
-        flutterBleCentralManager?.startScan(settings, callback)
+        // Restart the scan with the same settings and filters
+        flutterBleCentralManager?.startScan(currentScanFilters, settings, callback)
 
         // Schedule the next refresh
         scheduleScanRefresh()
@@ -381,6 +396,7 @@ class FlutterBleCentralPlugin :
     }
 
     currentScanSettings = null
+    currentScanFilters = null
 
     safeResult(result) {
       result.success(CentralBluetoothState.Ready.ordinal)
@@ -404,29 +420,31 @@ class FlutterBleCentralPlugin :
    * @param result Method channel result callback
    */
   private fun handleEnableBluetooth(call: MethodCall, result: Result) {
-    if (activityBinding != null) {
-      val shouldAsk = call.arguments as Boolean
-      val isEnabled = flutterBleCentralManager!!.isBluetoothEnabled()
-      if (!isEnabled) {
-        if (shouldAsk) {
-          flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity) { bluetoothEnabled ->
-            safeResult(result) {
-              result.success(bluetoothEnabled)
-            }
-          }
-          return
-        } else {
-          flutterBleCentralManager!!.enableBluetooth(activityBinding!!.activity, null)
-        }
+    val activity = activityBinding?.activity
+    if (activity == null) {
+      // Nothing can be asked without an activity; below Tiramisu the adapter can
+      // still be turned on without asking.
+      safeResult(result) {
+        result.success(flutterBleCentralManager?.enableBluetooth() ?: false)
       }
+      return
+    }
 
-      safeResult(result) {
-        result.success(true)
+    val shouldAsk = call.arguments as Boolean
+    if (!flutterBleCentralManager!!.isBluetoothEnabled()) {
+      if (shouldAsk) {
+        flutterBleCentralManager!!.enableBluetooth(activity) { bluetoothEnabled ->
+          safeResult(result) {
+            result.success(bluetoothEnabled)
+          }
+        }
+        return
       }
-    } else {
-      safeResult(result) {
-        result.error("No activity", "FlutterBlePeripheral is not correctly initialized", "null")
-      }
+      flutterBleCentralManager!!.enableBluetooth(activity, null)
+    }
+
+    safeResult(result) {
+      result.success(true)
     }
   }
 
@@ -434,7 +452,15 @@ class FlutterBleCentralPlugin :
    * Request runtime Bluetooth permissions.
    */
   private fun handleRequestPermission(result: Result) {
-    val state = flutterBleCentralManager!!.requestPermission(activityBinding!!.activity) { state ->
+    val activity = activityBinding?.activity
+    if (activity == null) {
+      // A service cannot prompt, so the current state is the answer, which is what
+      // the Apple side does as well.
+      safeResult(result) { result.success(currentPermissionState().ordinal) }
+      return
+    }
+
+    val state = flutterBleCentralManager!!.requestPermission(activity) { state ->
       safeResult(result) {
         result.success(state.ordinal)
       }
@@ -452,8 +478,14 @@ class FlutterBleCentralPlugin :
    * Check if Bluetooth permissions are granted.
    */
   private fun handleHasPermission(result: Result) {
+    val activity = activityBinding?.activity
+    if (activity == null) {
+      safeResult(result) { result.success(currentPermissionState().ordinal) }
+      return
+    }
+
     val permission = flutterBleCentralManager!!
-      .requestPermission(activityBinding!!.activity, null)!!
+      .requestPermission(activity, null)!!
       .ordinal
     safeResult(result) {
       result.success(permission)
@@ -461,10 +493,28 @@ class FlutterBleCentralPlugin :
   }
 
   /**
+   * The permission state as far as it can be told without an activity.
+   *
+   * `getMissingPermissions` needs one for its rationale check, so from a service
+   * this is the granted-or-not answer, with no way to tell a first refusal from a
+   * permanent one.
+   */
+  private fun currentPermissionState(): CentralBluetoothState {
+    val manager = flutterBleCentralManager
+    val appContext = context
+    if (manager == null || appContext == null) return CentralBluetoothState.Unsupported
+    return if (manager.hasRequiredPermissions(appContext)) {
+      CentralBluetoothState.Granted
+    } else {
+      CentralBluetoothState.Denied
+    }
+  }
+
+  /**
    * Open system app settings for this application.
    */
   private fun handleOpenAppSettings(result: Result) {
-    activityBinding!!.activity.startActivity(
+    startSettingsActivity(
       Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", context!!.packageName, null)
@@ -476,10 +526,25 @@ class FlutterBleCentralPlugin :
   }
 
   /**
+   * Opens a settings page, from the activity where there is one.
+   *
+   * An intent started from the application context rather than an activity needs
+   * NEW_TASK, and Android throws instead of launching without it.
+   */
+  private fun startSettingsActivity(intent: Intent) {
+    val activity = activityBinding?.activity
+    if (activity != null) {
+      activity.startActivity(intent)
+      return
+    }
+    context?.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+  }
+
+  /**
    * Open system Bluetooth settings.
    */
   private fun handleOpenBluetoothSettings(result: Result) {
-    activityBinding!!.activity.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS), null)
+    startSettingsActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     safeResult(result) {
       result.success(null)
     }
@@ -1333,7 +1398,9 @@ class FlutterBleCentralPlugin :
     grantResults: IntArray
   ): Boolean {
     if (requestCode == REQUEST_PERMISSION_BT) {
-      val activity = activityBinding!!.activity
+      // Only ever reached for a request an activity made, but it may have gone away
+      // in the meantime.
+      val activity = activityBinding?.activity ?: return false
 
       var hasAllPermissions = true
       var shouldShowRationale = false

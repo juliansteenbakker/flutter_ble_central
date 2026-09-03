@@ -78,6 +78,21 @@ On macOS, also tick the Bluetooth entitlement in **both**
 <true/>
 ```
 
+To stay connected once the app is no longer in front, add the background mode to
+`ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>bluetooth-central</string>
+</array>
+```
+
+Without it iOS stops the scan and drops the connections when the app leaves the
+foreground. What survives with it, and what does not, is under
+[Background scanning](#background-scanning). macOS has no background modes, and keeps
+scanning for as long as the app runs.
+
 ### Windows
 
 No manifest changes are needed.
@@ -134,6 +149,16 @@ On Android, the state you get back depends on what the user has done before:
 | User grants, then revokes in settings | true/false | true | false | `denied` |
 | Already granted | true/false | true | n/a | `granted` |
 
+That table needs an activity: the rationale check comes from one. From a foreground
+service, or any other engine with no activity attached, `hasPermission()` and
+`requestPermission()` report whether the permissions are granted and nothing finer,
+since a service cannot prompt. `start()` works there all the same — scanning and
+connecting need no activity — but the permissions have to have been granted by a screen
+that ran earlier, and it answers `denied` rather than asking when they are not.
+Bluetooth has to be on for the same reason: below Android 13 `enableBluetooth()` can
+still turn it on without asking, and above that Google removed the programmatic path,
+so there it answers `false`.
+
 ### Scanning
 
 Listen to `onScanResult` before calling `start`, so no advertisement is missed.
@@ -162,6 +187,21 @@ halves are folded together for you. Keeping the newest result per address gives 
 both. `deviceName` is null until a name is heard, which for an Android peripheral is
 never — it has no way to advertise one of its own.
 
+Pass `serviceUuids` to report only the peripherals advertising one of those services,
+in the 16 bit, 32 bit or 128 bit form:
+
+```dart
+await ble.start(serviceUuids: ['180d']);
+```
+
+It is a filter on the peripherals, not on the uuids reported back: a match still
+carries everything that peripheral advertised. Android and Apple filter in the
+controller, so an unwanted peripheral costs nothing; Windows filters in the plugin,
+since the filter WinRT offers requires an advertisement to carry *every* uuid named
+rather than any one of them, which is not what the other two mean. On iOS it is also
+the difference between a background scan that reports something and one that reports
+nothing at all — see [Background scanning](#background-scanning).
+
 ### Scan settings
 
 `ScanSettings` mirrors Android's
@@ -189,6 +229,10 @@ advertisement when scanning in a busy environment.
 
 Connect to a device found by scanning, discover what it serves, then read, write
 or subscribe. Every platform serves this.
+
+Uuids may be given in the 16 bit (`'2a37'`), 32 bit or 128 bit form; a short one is
+expanded onto the Bluetooth Base UUID before it is matched against what was discovered,
+so it finds the same characteristic either way.
 
 ```dart
 await ble.connect(address: address);
@@ -287,6 +331,40 @@ Pairing usually needs the user to confirm it, so `createBond` returns as soon as
 request is in and the outcome arrives on `onBondStateChanged`. `setPreferredPhy` is
 likewise a request: read it back with `readPhy` to see what the peripheral and the
 controller agreed on. PHY control needs Android 8.0.
+
+### Background scanning
+
+On Android a scan and its connections belong to the process, so both keep running while
+the app sits in the background and end when the system kills the process. Starting one
+from a service rather than from an activity is not supported: `start()` needs an
+activity to check permissions against, and answers with a `No activity` error without
+one, so the scan has to be started while the app is in front.
+
+On iOS everything stops with the foreground unless the app declares the
+`bluetooth-central` background mode, and even with it a connection and a scan fare
+differently.
+
+A connection survives. Core Bluetooth keeps it open, goes on delivering notifications,
+and can relaunch the app to hand it back, which is what the background mode is worth
+here today.
+
+A scan keeps going, but only a filtered one reports anything. iOS delivers a
+backgrounded scan's results only for peripherals matching the service uuids that scan
+named, so pass `serviceUuids` to `start()`; a scan started without them goes quiet the
+moment the app leaves the foreground, which is the usual reason background scanning
+looks broken. Two more rules apply to the scan that does report: `allowDuplicates` is
+ignored in the background, so results arrive once per peripheral per scan window with
+their advertisements merged rather than on every advertisement, and the scan runs at the
+system's convenience, so discovery takes longer.
+
+Declaring the background mode also lets the plugin register a restore identifier with
+Core Bluetooth, which is what allows iOS to relaunch the app into the background and
+hand the connected peripherals back. The plugin points each restored peripheral at its
+delegate again, so notifications keep arriving, and keeps the services that were
+discovered before, so nothing has to be discovered a second time. Connection state is
+only published when it changes, and a restored connection changed before the app was
+up, so a new `onConnectionStateChanged` listener is given the state of everything
+currently held.
 
 ### Streams
 

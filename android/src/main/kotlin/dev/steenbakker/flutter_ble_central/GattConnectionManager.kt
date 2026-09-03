@@ -286,8 +286,10 @@ class GattConnectionManager(
             return
         }
 
-        // Create unique key for this read operation
-        val key = "$address:$serviceUuid:$characteristicUuid"
+        // Keyed by the uuids the callback reports rather than the ones asked
+        // for: a short uuid comes back expanded to its 128 bit form, and a key
+        // built from the short one would never be found again.
+        val key = "$address:${characteristic.service.uuid}:${characteristic.uuid}"
 
         enqueueOperation(GattOperation(
             address = address,
@@ -461,8 +463,9 @@ class GattConnectionManager(
             return
         }
 
-        // Create unique key for this read operation
-        val key = "$address:$serviceUuid:$characteristicUuid:$descriptorUuid"
+        // Keyed the same way as a characteristic read, and for the same reason.
+        val key = "$address:${descriptor.characteristic.service.uuid}:" +
+            "${descriptor.characteristic.uuid}:${descriptor.uuid}"
 
         enqueueOperation(GattOperation(
             address = address,
@@ -759,12 +762,10 @@ class GattConnectionManager(
         characteristicUuid: String
     ): BluetoothGattCharacteristic? {
         val services = discoveredServices[address] ?: return null
-        val service = services.find {
-            it.uuid.toString().equals(serviceUuid, ignoreCase = true)
-        } ?: return null
-        return service.characteristics.find {
-            it.uuid.toString().equals(characteristicUuid, ignoreCase = true)
-        }
+        val wantedService = parseUuid(serviceUuid) ?: return null
+        val wantedCharacteristic = parseUuid(characteristicUuid) ?: return null
+        val service = services.find { it.uuid == wantedService } ?: return null
+        return service.characteristics.find { it.uuid == wantedCharacteristic }
     }
 
     private fun getDescriptor(
@@ -774,9 +775,8 @@ class GattConnectionManager(
         descriptorUuid: String
     ): BluetoothGattDescriptor? {
         val characteristic = getCharacteristic(address, serviceUuid, characteristicUuid) ?: return null
-        return characteristic.descriptors.find {
-            it.uuid.toString().equals(descriptorUuid, ignoreCase = true)
-        }
+        val wanted = parseUuid(descriptorUuid) ?: return null
+        return characteristic.descriptors.find { it.uuid == wanted }
     }
 
     private fun serializeServices(services: List<BluetoothGattService>): List<Map<String, Any>> {
