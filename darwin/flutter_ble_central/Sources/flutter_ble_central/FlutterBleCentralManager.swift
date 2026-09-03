@@ -34,6 +34,18 @@ final class FlutterBleCentralManager {
     /// The underlying CoreBluetooth central manager.
     private let centralManager: CBCentralManager
 
+    /// The identifier Core Bluetooth hands the connected peripherals back under,
+    /// after it relaunched the app into the background.
+    static let restoreIdentifier = "dev.steenbakker.flutter_ble_central.central_manager"
+
+    /// Whether the app declares the `bluetooth-central` background mode, which is
+    /// what keeps a scan and a connection alive once the app is no longer in front,
+    /// and what lets Core Bluetooth relaunch the app to hand its state back.
+    static var declaresCentralBackgroundMode: Bool {
+        let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String]
+        return modes?.contains("bluetooth-central") ?? false
+    }
+
     /// Delegate responsible for handling scan results and state changes.
     private let centralManagerDelegate: CentralManagerDelegate
 
@@ -86,9 +98,22 @@ final class FlutterBleCentralManager {
             }
         )
 
+        var options: [String: Any] = [:]
+#if os(iOS)
+        // Only an app that stays connected in the background is ever relaunched to
+        // be handed its state back, so the identifier is set exactly when it asked
+        // for that. Handing one to an app without the background mode would leave
+        // Core Bluetooth holding state it can never give back.
+        if FlutterBleCentralManager.declaresCentralBackgroundMode {
+            options[CBCentralManagerOptionRestoreIdentifierKey] =
+                FlutterBleCentralManager.restoreIdentifier
+        }
+#endif
+
         self.centralManager = CBCentralManager(
             delegate: self.centralManagerDelegate,
-            queue: callbackQueue
+            queue: callbackQueue,
+            options: options
         )
 
         // Built after the central manager, since it needs it, and wired into the
@@ -108,6 +133,9 @@ final class FlutterBleCentralManager {
         }
         centralManagerDelegate.onDisconnect = { [weak self] peripheral, error in
             self?.gatt.handleDidDisconnect(peripheral, error: error)
+        }
+        centralManagerDelegate.onRestore = { [weak self] peripherals in
+            self?.gatt.restore(peripherals)
         }
     }
 

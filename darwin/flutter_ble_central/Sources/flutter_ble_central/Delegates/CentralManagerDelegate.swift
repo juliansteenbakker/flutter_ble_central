@@ -36,11 +36,16 @@ final class CentralManagerDelegate: NSObject, CBCentralManagerDelegate {
     /// Closure type for the connection events the GATT client half follows.
     typealias ConnectionHandler = (CBPeripheral, Error?) -> Void
 
+    /// Closure type for the peripherals Core Bluetooth hands back after it
+    /// relaunched the app into the background.
+    typealias RestoreHandler = ([CBPeripheral]) -> Void
+
     /// Set once the GATT connection manager exists. It cannot be handed in here,
     /// since it needs the central manager that this delegate is built with.
     var onConnect: ConnectionHandler?
     var onConnectFailed: ConnectionHandler?
     var onDisconnect: ConnectionHandler?
+    var onRestore: RestoreHandler?
 
     /**
      Creates a new delegate with state and discovery callbacks.
@@ -55,6 +60,22 @@ final class CentralManagerDelegate: NSObject, CBCentralManagerDelegate {
     ) {
         self.onStateChange = onStateChange
         self.onDiscovery = onDiscovery
+    }
+
+    /**
+     Called by CoreBluetooth when it has relaunched the app into the background and
+     is handing back the peripherals it kept connected in the meantime.
+
+     This arrives before `centralManagerDidUpdateState`, and before anything Dart
+     asks for, which is what makes it the place to take the connections back.
+
+     - Parameters:
+       - central: The `CBCentralManager` being restored.
+       - dict: The state Core Bluetooth kept, keyed by its restoration keys.
+     */
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
+        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        onRestore?(peripherals)
     }
 
     /**

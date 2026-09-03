@@ -612,6 +612,63 @@ final class GattConnectionManager: NSObject {
         }
     }
 
+    // MARK: - Background Restoration
+
+    /**
+     Takes back the peripherals Core Bluetooth kept connected while the app was
+     gone, after it relaunched the app into the background.
+
+     Called from the central manager delegate, already on `queue`.
+
+     Pointing each peripheral's delegate back at this object is the part that
+     matters: a restored connection is still open and its characteristics are still
+     notifying, but every callback they make goes nowhere until the delegate is set,
+     so the link would come back alive and deaf.
+     */
+    func restore(_ peripherals: [CBPeripheral]) {
+        for peripheral in peripherals {
+            let state: GattConnectionState
+            switch peripheral.state {
+            case .connected: state = .connected
+            case .connecting: state = .connecting
+            case .disconnecting: state = .disconnecting
+            // A peripheral that is no longer connected is nothing to take back;
+            // Dart reaches it through the system the way it did the first time.
+            default: continue
+            }
+
+            let connection = Connection(peripheral: peripheral)
+            peripheral.delegate = self
+            // What was discovered before the relaunch comes back with the
+            // peripheral, so a read or a write finds it without discovering again.
+            connection.services = peripheral.services ?? []
+            connections[peripheral.identifier] = connection
+            publishState(connection, state)
+        }
+
+        print("[flutter_ble_central] Restored \(connections.count) connection(s)")
+    }
+
+    /**
+     Publishes the state of every connection this manager holds.
+
+     A connection state is only published when it changes, so a listener that
+     attaches afterwards hears nothing about it. That is the position Dart is in
+     after a background relaunch, where the connection was restored before the app
+     was up, so a new listener is brought up to date instead.
+     */
+    func republishConnectionStates() {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            for connection in self.connections.values {
+                self.connectionStateHandler.publish([
+                    "address": connection.peripheral.identifier.uuidString,
+                    "state": connection.state.rawValue,
+                ])
+            }
+        }
+    }
+
     // MARK: - Central manager callbacks
 
     /// Called from the central manager delegate, already on `queue`.

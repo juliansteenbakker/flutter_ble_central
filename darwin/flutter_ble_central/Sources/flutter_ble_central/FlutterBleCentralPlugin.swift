@@ -72,6 +72,13 @@ public class FlutterBleCentralPlugin: NSObject, FlutterPlugin {
             characteristicValueHandler: characteristicValueHandler
         )
         super.init()
+
+        // A connection that survived a background relaunch was restored before Dart
+        // was up, and connection state is only published when it changes, so a new
+        // listener is told what is currently held.
+        connectionStateHandler.onSubscribe = { [weak self] in
+            self?.flutterBleCentralManager.gatt.republishConnectionStates()
+        }
     }
     
     /**
