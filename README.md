@@ -134,6 +134,16 @@ On Android, the state you get back depends on what the user has done before:
 | User grants, then revokes in settings | true/false | true | false | `denied` |
 | Already granted | true/false | true | n/a | `granted` |
 
+That table needs an activity: the rationale check comes from one. From a foreground
+service, or any other engine with no activity attached, `hasPermission()` and
+`requestPermission()` report whether the permissions are granted and nothing finer,
+since a service cannot prompt. `start()` works there all the same — scanning and
+connecting need no activity — but the permissions have to have been granted by a screen
+that ran earlier, and it answers `denied` rather than asking when they are not.
+Bluetooth has to be on for the same reason: below Android 13 `enableBluetooth()` can
+still turn it on without asking, and above that Google removed the programmatic path,
+so there it answers `false`.
+
 ### Scanning
 
 Listen to `onScanResult` before calling `start`, so no advertisement is missed.
@@ -189,6 +199,10 @@ advertisement when scanning in a busy environment.
 
 Connect to a device found by scanning, discover what it serves, then read, write
 or subscribe. Every platform serves this.
+
+Uuids may be given in the 16 bit (`'2a37'`), 32 bit or 128 bit form; a short one is
+expanded onto the Bluetooth Base UUID before it is matched against what was discovered,
+so it finds the same characteristic either way.
 
 ```dart
 await ble.connect(address: address);
