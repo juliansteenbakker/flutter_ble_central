@@ -78,6 +78,21 @@ On macOS, also tick the Bluetooth entitlement in **both**
 <true/>
 ```
 
+To stay connected once the app is no longer in front, add the background mode to
+`ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>bluetooth-central</string>
+</array>
+```
+
+Without it iOS stops the scan and drops the connections when the app leaves the
+foreground. What survives with it, and what does not, is under
+[Background scanning](#background-scanning). macOS has no background modes, and keeps
+scanning for as long as the app runs.
+
 ### Windows
 
 No manifest changes are needed.
@@ -287,6 +302,40 @@ Pairing usually needs the user to confirm it, so `createBond` returns as soon as
 request is in and the outcome arrives on `onBondStateChanged`. `setPreferredPhy` is
 likewise a request: read it back with `readPhy` to see what the peripheral and the
 controller agreed on. PHY control needs Android 8.0.
+
+### Background scanning
+
+On Android a scan and its connections belong to the process, so both keep running while
+the app sits in the background and end when the system kills the process. Starting one
+from a service rather than from an activity is not supported: `start()` needs an
+activity to check permissions against, and answers with a `No activity` error without
+one, so the scan has to be started while the app is in front.
+
+On iOS everything stops with the foreground unless the app declares the
+`bluetooth-central` background mode, and even with it a connection and a scan fare
+differently.
+
+A connection survives. Core Bluetooth keeps it open, goes on delivering notifications,
+and can relaunch the app to hand it back, which is what the background mode is worth
+here today.
+
+A scan does not, and this package cannot yet make it. iOS reports a backgrounded scan's
+results only for peripherals matching the service uuids that scan named, and
+`ScanSettings` has no service filter to name them with, so a scan carries on being
+delivered while the app is in front and goes quiet when it is not. Two more rules apply
+once a filter exists: `allowDuplicates` is ignored in the background, so results arrive
+once per peripheral per scan window with their advertisements merged rather than on
+every advertisement, and the scan runs at the system's convenience, so discovery takes
+longer.
+
+Declaring the background mode also lets the plugin register a restore identifier with
+Core Bluetooth, which is what allows iOS to relaunch the app into the background and
+hand the connected peripherals back. The plugin points each restored peripheral at its
+delegate again, so notifications keep arriving, and keeps the services that were
+discovered before, so nothing has to be discovered a second time. Connection state is
+only published when it changes, and a restored connection changed before the app was
+up, so a new `onConnectionStateChanged` listener is given the state of everything
+currently held.
 
 ### Streams
 

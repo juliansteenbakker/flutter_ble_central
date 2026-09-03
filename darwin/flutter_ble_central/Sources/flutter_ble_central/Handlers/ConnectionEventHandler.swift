@@ -27,6 +27,10 @@ final class ConnectionEventHandler: NSObject, FlutterStreamHandler {
     /// Set while Flutter is listening. Read and written on the platform thread.
     private var eventSink: FlutterEventSink?
 
+    /// Called when Flutter starts listening, for a stream whose events describe a
+    /// state the listener may have missed. Set by the plugin where that applies.
+    var onSubscribe: (() -> Void)?
+
     init(registrar: FlutterPluginRegistrar, name: String) {
 #if os(iOS)
         let messenger = registrar.messenger()
@@ -62,6 +66,7 @@ final class ConnectionEventHandler: NSObject, FlutterStreamHandler {
         eventSink: @escaping FlutterEventSink
     ) -> FlutterError? {
         self.eventSink = eventSink
+        onSubscribe?()
         return nil
     }
 
