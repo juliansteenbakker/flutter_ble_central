@@ -187,6 +187,21 @@ halves are folded together for you. Keeping the newest result per address gives 
 both. `deviceName` is null until a name is heard, which for an Android peripheral is
 never — it has no way to advertise one of its own.
 
+Pass `serviceUuids` to report only the peripherals advertising one of those services,
+in the 16 bit, 32 bit or 128 bit form:
+
+```dart
+await ble.start(serviceUuids: ['180d']);
+```
+
+It is a filter on the peripherals, not on the uuids reported back: a match still
+carries everything that peripheral advertised. Android and Apple filter in the
+controller, so an unwanted peripheral costs nothing; Windows filters in the plugin,
+since the filter WinRT offers requires an advertisement to carry *every* uuid named
+rather than any one of them, which is not what the other two mean. On iOS it is also
+the difference between a background scan that reports something and one that reports
+nothing at all — see [Background scanning](#background-scanning).
+
 ### Scan settings
 
 `ScanSettings` mirrors Android's
@@ -333,14 +348,14 @@ A connection survives. Core Bluetooth keeps it open, goes on delivering notifica
 and can relaunch the app to hand it back, which is what the background mode is worth
 here today.
 
-A scan does not, and this package cannot yet make it. iOS reports a backgrounded scan's
-results only for peripherals matching the service uuids that scan named, and
-`ScanSettings` has no service filter to name them with, so a scan carries on being
-delivered while the app is in front and goes quiet when it is not. Two more rules apply
-once a filter exists: `allowDuplicates` is ignored in the background, so results arrive
-once per peripheral per scan window with their advertisements merged rather than on
-every advertisement, and the scan runs at the system's convenience, so discovery takes
-longer.
+A scan keeps going, but only a filtered one reports anything. iOS delivers a
+backgrounded scan's results only for peripherals matching the service uuids that scan
+named, so pass `serviceUuids` to `start()`; a scan started without them goes quiet the
+moment the app leaves the foreground, which is the usual reason background scanning
+looks broken. Two more rules apply to the scan that does report: `allowDuplicates` is
+ignored in the background, so results arrive once per peripheral per scan window with
+their advertisements merged rather than on every advertisement, and the scan runs at the
+system's convenience, so discovery takes longer.
 
 Declaring the background mode also lets the plugin register a restore identifier with
 Core Bluetooth, which is what allows iOS to relaunch the app into the background and

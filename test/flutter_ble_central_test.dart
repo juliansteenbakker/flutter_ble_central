@@ -79,6 +79,45 @@ void main() {
     );
 
     test(
+      'sends the service uuids a filtered scan asked for',
+      () async {
+        response = 0;
+
+        await ble.start(
+          serviceUuids: ['180d', '6e400001-b5a3-f393-e0a9-e50e24dcca9e'],
+        );
+
+        final arguments = calls.single.arguments as Map<Object?, Object?>;
+        expect(arguments['serviceUuids'], [
+          '180d',
+          '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        ]);
+      },
+      skip: Platform.isWindows,
+    );
+
+    test(
+      'sends no service uuids for an unfiltered scan',
+      () async {
+        response = 0;
+
+        await ble.start();
+
+        final arguments = calls.single.arguments as Map<Object?, Object?>;
+        expect(arguments.containsKey('serviceUuids'), isFalse);
+      },
+      skip: Platform.isWindows,
+    );
+
+    test('rejects an empty service uuid', () async {
+      await expectLater(
+        ble.start(serviceUuids: const ['180d', ' ']),
+        throwsArgumentError,
+      );
+      expect(calls, isEmpty);
+    });
+
+    test(
       'defaults the settings when none are given',
       () async {
         response = 0;

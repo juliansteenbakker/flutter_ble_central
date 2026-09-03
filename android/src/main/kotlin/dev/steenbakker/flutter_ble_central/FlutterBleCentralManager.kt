@@ -56,8 +56,14 @@ class FlutterBleCentralManager(context: Context) {
    *
    * @throws NullPointerException if [mBluetoothLeScanner] is null
    */
-  fun startScan(scanSettings: ScanSettings, scanCallback: ScanCallback) {
-    mBluetoothLeScanner!!.startScan(null, scanSettings, scanCallback)
+  fun startScan(
+    filters: List<ScanFilter>?,
+    scanSettings: ScanSettings,
+    scanCallback: ScanCallback
+  ) {
+    // Null rather than an empty list: an empty list of filters matches nothing,
+    // where null means everything, which is what no filter should mean.
+    mBluetoothLeScanner!!.startScan(filters?.takeIf { it.isNotEmpty() }, scanSettings, scanCallback)
   }
 
   /**
