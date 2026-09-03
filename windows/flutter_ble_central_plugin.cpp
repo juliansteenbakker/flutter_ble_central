@@ -342,6 +342,30 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         return;
       }
       try {
+        scan_service_uuids_.clear();
+        if (const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments())) {
+          auto entry = arguments->find(flutter::EncodableValue("serviceUuids"));
+          if (entry != arguments->end()) {
+            if (const auto* list = std::get_if<flutter::EncodableList>(&entry->second)) {
+              for (const auto& value : *list) {
+                const auto* uuid = std::get_if<std::string>(&value);
+                if (!uuid) {
+                  result->Error("INVALID_ARGUMENT", "A scan service uuid must be a string");
+                  return;
+                }
+                try {
+                  scan_service_uuids_.push_back(FormatUuid(ParseUuid(*uuid)));
+                }
+                catch (...) {
+                  scan_service_uuids_.clear();
+                  result->Error("INVALID_ARGUMENT", *uuid + " is not a service uuid");
+                  return;
+                }
+              }
+            }
+          }
+        }
+
         if (!bluetoothLEWatcher) {
           bluetoothLEWatcher = BluetoothLEAdvertisementWatcher();
           bluetoothLEWatcher.ScanningMode(BluetoothLEScanningMode::Active);
@@ -371,6 +395,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         bluetoothLEWatcherReceivedToken = {};
         bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
+        scan_service_uuids_.clear();
         seen_peripherals_.clear();
         result->Success(flutter::EncodableValue());
       }
@@ -378,6 +403,7 @@ void FlutterBleCentralPlugin::HandleMethodCall(
         bluetoothLEWatcherReceivedToken = {};
         bluetoothLEWatcherStoppedToken = {};
         bluetoothLEWatcher = nullptr;
+        scan_service_uuids_.clear();
         seen_peripherals_.clear();
         result->Error("stop_failed", "Failed to stop scanning");
       }
@@ -595,6 +621,24 @@ winrt::fire_and_forget FlutterBleCentralPlugin::BluetoothLEWatcher_Received(
     if (!manufacturer_data.empty()) {
       seen.manufacturer_data = std::move(manufacturer_data);
       seen.manufacturer_id = manufacturerId;
+    }
+
+    // A filtered scan reports only peripherals that have advertised one of the
+    // wanted services. Matched against the merged record rather than this packet,
+    // since the uuid may have arrived in an earlier advertisement or in the scan
+    // response, and a peripheral that already qualified goes on qualifying.
+    if (!scan_service_uuids_.empty()) {
+      bool wanted = false;
+      for (const auto& value : seen.service_uuids) {
+        const auto* uuid = std::get_if<std::string>(&value);
+        if (!uuid) continue;
+        if (std::find(scan_service_uuids_.begin(), scan_service_uuids_.end(), *uuid) !=
+            scan_service_uuids_.end()) {
+          wanted = true;
+          break;
+        }
+      }
+      if (!wanted) co_return;
     }
 
     if (scan_result_sink_) {

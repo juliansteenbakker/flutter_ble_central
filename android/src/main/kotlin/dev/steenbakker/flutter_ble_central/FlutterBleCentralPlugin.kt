@@ -5,7 +5,9 @@ import android.app.Activity
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import dev.steenbakker.flutter_ble_central.callbacks.ScanResultCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanSettings
+import android.os.ParcelUuid
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -126,6 +128,9 @@ class FlutterBleCentralPlugin :
 
   /** Stored scan settings for restarting the scan */
   private var currentScanSettings: ScanSettings? = null
+
+  /** The filters the running scan was started with, so a refresh keeps them. */
+  private var currentScanFilters: List<ScanFilter>? = null
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     methodChannel = MethodChannel(
@@ -296,12 +301,23 @@ class FlutterBleCentralPlugin :
     val enableTimingStats = (arguments["enableTimingStats"] as Boolean?) ?: true
     scanResultHandler.setEnableTimingStats(enableTimingStats)
 
+    // A filtered scan only reports peripherals advertising one of these services,
+    // which is also what iOS needs to report anything at all in the background.
+    val filters = (arguments["serviceUuids"] as List<*>?)?.map { value ->
+      val uuid = value as? String
+        ?: throw IllegalArgumentException("A scan service uuid must be a string")
+      val parsed = parseUuid(uuid)
+        ?: throw IllegalArgumentException("Invalid service uuid: $uuid")
+      ScanFilter.Builder().setServiceUuid(ParcelUuid(parsed)).build()
+    }
+
     scanCallback = ScanResultCallback(scanResultHandler, scanErrorHandler)
 
     try {
       val builtSettings = scanSettings.build()
       currentScanSettings = builtSettings
-      flutterBleCentralManager?.startScan(builtSettings, scanCallback!!)
+      currentScanFilters = filters
+      flutterBleCentralManager?.startScan(filters, builtSettings, scanCallback!!)
 
       // Schedule scan refresh after 4 minutes (240,000 milliseconds)
       scheduleScanRefresh()
@@ -355,8 +371,8 @@ class FlutterBleCentralPlugin :
         // Stop the current scan
         flutterBleCentralManager?.stopScan(callback)
 
-        // Restart the scan with the same settings
-        flutterBleCentralManager?.startScan(settings, callback)
+        // Restart the scan with the same settings and filters
+        flutterBleCentralManager?.startScan(currentScanFilters, settings, callback)
 
         // Schedule the next refresh
         scheduleScanRefresh()
@@ -380,6 +396,7 @@ class FlutterBleCentralPlugin :
     }
 
     currentScanSettings = null
+    currentScanFilters = null
 
     safeResult(result) {
       result.success(CentralBluetoothState.Ready.ordinal)
