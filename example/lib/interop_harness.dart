@@ -36,6 +36,12 @@ const harnessComboUuidShort = 'ff01';
 /// [harnessComboUuidShort] as the peripheral reports it.
 const harnessComboUuid = '0000ff01-0000-1000-8000-00805f9b34fb';
 
+/// The characteristic the peripheral serves as readable and nothing else.
+const harnessReadOnlyUuidShort = 'ff02';
+
+/// [harnessReadOnlyUuidShort] as the peripheral reports it.
+const harnessReadOnlyUuid = '0000ff02-0000-1000-8000-00805f9b34fb';
+
 /// A service uuid nothing serves, for checking that a filtered scan leaves out
 /// what it was not asked for.
 const absentServiceUuid = '0000fffe-0000-1000-8000-00805f9b34fb';
@@ -623,7 +629,10 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
         );
       });
 
-      await _observe('combo.read', () async {
+      // Asserted rather than reported: a read named by the short uuid has to
+      // reach the same characteristic as its long form, and the way that broke
+      // was the read never coming back at all.
+      await _check('combo.read', () async {
         final value = await _ble.readCharacteristic(
           address: address,
           serviceUuid: harnessServiceUuid,
@@ -638,6 +647,18 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
         address: address,
         serviceUuid: harnessServiceUuid,
         characteristicUuid: txUuid,
+      );
+      return '${value.length} bytes';
+    });
+
+    // The one characteristic that only reads. Nothing seeds it, so the length
+    // is the platform's own business; what is worth knowing is whether a
+    // peripheral answers a read on a characteristic that never notifies.
+    await _observe('readOnly.read', () async {
+      final value = await _ble.readCharacteristic(
+        address: address,
+        serviceUuid: harnessServiceUuid,
+        characteristicUuid: harnessReadOnlyUuidShort,
       );
       return '${value.length} bytes';
     });

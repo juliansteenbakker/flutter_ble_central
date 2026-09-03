@@ -286,8 +286,10 @@ class GattConnectionManager(
             return
         }
 
-        // Create unique key for this read operation
-        val key = "$address:$serviceUuid:$characteristicUuid"
+        // Keyed by the uuids the callback reports rather than the ones asked
+        // for: a short uuid comes back expanded to its 128 bit form, and a key
+        // built from the short one would never be found again.
+        val key = "$address:${characteristic.service.uuid}:${characteristic.uuid}"
 
         enqueueOperation(GattOperation(
             address = address,
@@ -461,8 +463,9 @@ class GattConnectionManager(
             return
         }
 
-        // Create unique key for this read operation
-        val key = "$address:$serviceUuid:$characteristicUuid:$descriptorUuid"
+        // Keyed the same way as a characteristic read, and for the same reason.
+        val key = "$address:${descriptor.characteristic.service.uuid}:" +
+            "${descriptor.characteristic.uuid}:${descriptor.uuid}"
 
         enqueueOperation(GattOperation(
             address = address,
