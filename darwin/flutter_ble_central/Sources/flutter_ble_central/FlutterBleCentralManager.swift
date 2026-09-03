@@ -37,12 +37,6 @@ final class FlutterBleCentralManager {
     /// Delegate responsible for handling scan results and state changes.
     private let centralManagerDelegate: CentralManagerDelegate
 
-    /// Indicates whether a BLE scan is currently active.
-    private(set) var isScanning = false
-
-    /// Map of discovered peripherals by their `UUID`.
-    private(set) var activePeripherals = [PeripheralID: CBPeripheral]()
-
     /// Serves the GATT client half: connections, discovery, reads and writes.
     /// Built in `init`, after the central manager it works through.
     private(set) var gatt: GattConnectionManager!
@@ -117,7 +111,6 @@ final class FlutterBleCentralManager {
      - Parameter services: An optional array of `CBUUID`s to filter peripherals by.
      */
     func startScan(with services: [ServiceID]?) {
-        isScanning = true
         if centralManager.state != .poweredOn {
             print("CBCentralManager must be powered on to scan peripherals. Current state: \(centralManager.state.rawValue)")
         }
@@ -130,7 +123,6 @@ final class FlutterBleCentralManager {
     /// Stops scanning for peripherals.
     func stopScan() {
         centralManager.stopScan()
-        isScanning = false
     }
 
     /**
