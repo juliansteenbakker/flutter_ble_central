@@ -28,8 +28,24 @@ const harnessServiceUuid = 'bf27730d-860a-4e09-889c-2d8b6a9e0fe7';
 /// still checked, since refusing costs nothing.
 const runBondingCalls = bool.fromEnvironment('HARNESS_BONDING');
 
+/// The third characteristic the peripheral harness serves, addressed here in
+/// the 16 bit form on purpose: the peripheral declares it short, reports it
+/// long, and this proves a short form reaches the same characteristic.
+const harnessComboUuidShort = 'ff01';
+
+/// [harnessComboUuidShort] as the peripheral reports it.
+const harnessComboUuid = '0000ff01-0000-1000-8000-00805f9b34fb';
+
+/// A service uuid nothing serves, for checking that a filtered scan leaves out
+/// what it was not asked for.
+const absentServiceUuid = '0000fffe-0000-1000-8000-00805f9b34fb';
+
 /// How long to wait for the peripheral to turn up in a scan.
 const scanTimeout = Duration(seconds: 30);
+
+/// How long a scan that should report nothing is watched before it counts as
+/// having reported nothing.
+const negativeScanWindow = Duration(seconds: 6);
 
 /// How long any single call is given before it counts as hung.
 const callTimeout = Duration(seconds: 20);
@@ -131,14 +147,19 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
   final _ble = FlutterBleCentral();
   final _results = <CheckResult>[];
 
-  /// Values the peripheral notified, waited on by the round-trip checks.
-  final _notified = StreamController<Uint8List>.broadcast();
+  /// What the peripheral notified, with the characteristic it came in on, so a
+  /// round trip can insist on the one it expects rather than any notification.
+  final _notified = StreamController<CharacteristicValue>.broadcast();
 
   StreamSubscription<CharacteristicValue>? _valueSub;
 
   String? _address;
   late String _txUuid;
   late String _rxUuid;
+
+  /// The combined read, write and notify characteristic, once discovery has
+  /// found it. Null on a peripheral that predates it.
+  String? _comboUuid;
 
   @override
   void initState() {
@@ -295,8 +316,11 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
     });
 
     try {
-      await _check('startScan', () async {
-        final state = await _ble.start();
+      // Filtered, which is the only kind iOS reports in the background, and
+      // the filter is the harness service, so a peripheral that turns up here
+      // has already passed the filter.
+      await _check('startScan.filtered', () async {
+        final state = await _ble.start(serviceUuids: [harnessServiceUuid]);
         if (state != CentralBluetoothState.ready &&
             state != CentralBluetoothState.granted) {
           throw StateError('scan did not start: ${state.name}');
@@ -324,6 +348,8 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
       await Future<void>.delayed(_settleWindow);
       await _check('stopScan', () async => (await _ble.stop()).name);
 
+      await _checkFilterExcludes();
+
       if (matched.length > 1) {
         _report(
           'onePeripheralOnly',
@@ -338,6 +364,43 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
       return address;
     } finally {
       await subscription.cancel();
+    }
+  }
+
+  /// Scans for a service nothing serves, and insists the harness stays out of
+  /// the results.
+  ///
+  /// A filter that is accepted and then ignored looks exactly like a working
+  /// one until something depends on it, which on iOS is every background scan,
+  /// so the exclusion is worth a check of its own.
+  Future<void> _checkFilterExcludes() async {
+    var seen = false;
+    final subscription = _ble.onScanResult.listen((result) {
+      final uuids = result.scanRecord?.serviceUuids ?? const <String?>[];
+      if (uuids.any((uuid) => uuid?.toLowerCase() == harnessServiceUuid)) {
+        seen = true;
+      }
+    });
+
+    try {
+      await _check('startScan.filterExcludes', () async {
+        final state = await _ble.start(serviceUuids: [absentServiceUuid]);
+        if (state != CentralBluetoothState.ready &&
+            state != CentralBluetoothState.granted) {
+          throw StateError('scan did not start: ${state.name}');
+        }
+        await Future<void>.delayed(negativeScanWindow);
+        if (seen) {
+          throw StateError(
+            'the harness was reported by a scan filtered on '
+            '$absentServiceUuid',
+          );
+        }
+        return 'nothing reported in ${negativeScanWindow.inSeconds}s';
+      });
+    } finally {
+      await subscription.cancel();
+      await _ble.stop();
     }
   }
 
@@ -421,6 +484,38 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
     _txUuid = tx.uuid;
     _rxUuid = rx.uuid;
 
+    // The third characteristic, which the peripheral declares with a 16 bit
+    // uuid and serves as readable, writable and notifying at once.
+    final combo = characteristics.firstWhereOrNull(
+      (c) => c.uuid.toLowerCase() == harnessComboUuid,
+    );
+    await _check('comboCharacteristic', () async {
+      if (combo == null) {
+        throw StateError('$harnessComboUuid is not among what it serves');
+      }
+      final writes =
+          combo.properties.write || combo.properties.writeWithoutResponse;
+      final notifies = combo.properties.notify || combo.properties.indicate;
+      if (!writes || !notifies) {
+        throw StateError(
+          'serves $harnessComboUuid but it '
+          '${writes ? 'does not notify' : 'does not take writes'}',
+        );
+      }
+      return '${combo.uuid} writes and notifies';
+    });
+    _comboUuid = combo?.uuid;
+
+    await _check('characteristicCount', () async {
+      if (characteristics.length < 3) {
+        throw StateError(
+          'expected the three characteristics the harness serves, found '
+          '${characteristics.length}',
+        );
+      }
+      return '${characteristics.length}';
+    });
+
     // Reported rather than asserted: which descriptors a peripheral exposes is
     // its own business, and the platforms differ on what they hand back.
     final descriptors = characteristics
@@ -451,11 +546,10 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
     final txUuid = _txUuid;
     final rxUuid = _rxUuid;
 
+    // Everything, not only TX: which characteristic a notification arrives on
+    // is half of what the routing checks are asserting.
     _valueSub = _ble.onCharacteristicValueChanged.listen((event) {
-      if (event.characteristicUuid.toLowerCase() != txUuid.toLowerCase()) {
-        return;
-      }
-      if (!_notified.isClosed) _notified.add(event.value);
+      if (!_notified.isClosed) _notified.add(event);
     });
 
     await _check('setCharacteristicNotification.enable', () async {
@@ -485,6 +579,59 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
         withoutResponse: true,
       );
     });
+
+    // The combined characteristic, addressed by its 16 bit uuid: subscribing,
+    // writing and having the echo come back on that same characteristic is the
+    // whole of what a multi-characteristic layout adds, and the short form
+    // proves the uuid parsing agrees across the two plugins.
+    final comboUuid = _comboUuid;
+    if (comboUuid == null) {
+      _report(
+        'combo.roundTrip',
+        Outcome.skip,
+        'the peripheral does not serve $harnessComboUuid',
+      );
+    } else {
+      await _check('combo.subscribeByShortUuid', () async {
+        await _ble.setCharacteristicNotification(
+          address: address,
+          serviceUuid: harnessServiceUuid,
+          characteristicUuid: harnessComboUuidShort,
+          enable: true,
+        );
+        return 'subscribed to $harnessComboUuidShort';
+      });
+
+      await _check('combo.roundTrip', () async {
+        return _roundTrip(
+          address,
+          harnessComboUuidShort,
+          Uint8List.fromList([0x11, 0x22]),
+          withoutResponse: false,
+          expectOn: comboUuid,
+        );
+      });
+
+      // Written to RX, which cannot notify, so this one has to come back on TX
+      // even though the central is now subscribed to both.
+      await _check('multiCharacteristic.routing', () async {
+        return _roundTrip(
+          address,
+          rxUuid,
+          Uint8List.fromList([0x33]),
+          withoutResponse: false,
+        );
+      });
+
+      await _observe('combo.read', () async {
+        final value = await _ble.readCharacteristic(
+          address: address,
+          serviceUuid: harnessServiceUuid,
+          characteristicUuid: harnessComboUuidShort,
+        );
+        return '${value.length} bytes';
+      });
+    }
 
     await _observe('readCharacteristic', () async {
       final value = await _ble.readCharacteristic(
@@ -520,17 +667,24 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
     });
   }
 
-  /// Writes [value] and waits for the peripheral to echo it back on TX.
+  /// Writes [value] to [rxUuid] and waits for the peripheral to echo it back on
+  /// [expectOn], which defaults to TX.
   ///
-  /// One round trip proves the write arrived, the subscription is live, and the
-  /// bytes survived both directions.
+  /// One round trip proves the write arrived, the subscription is live, the
+  /// bytes survived both directions, and the echo came back on the
+  /// characteristic it was supposed to rather than on whichever one the
+  /// peripheral notifies most easily.
   Future<String> _roundTrip(
     String address,
     String rxUuid,
     Uint8List value, {
     required bool withoutResponse,
+    String? expectOn,
   }) async {
-    final echo = _notified.stream.first;
+    final wanted = (expectOn ?? _txUuid).toLowerCase();
+    final echo = _notified.stream
+        .firstWhere((e) => e.characteristicUuid.toLowerCase() == wanted)
+        .then((e) => e.value);
     await _ble.writeCharacteristic(
       address: address,
       serviceUuid: harnessServiceUuid,
