@@ -34,10 +34,7 @@ class LinkPage extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  'IN RANGE',
-                  style: context.tokens.panelLabel,
-                ),
+                child: Text('IN RANGE', style: context.tokens.panelLabel),
               ),
               Text(
                 '${devices.length} of ${controller.devicesSeen}',
@@ -141,14 +138,8 @@ class _ConnectionPanel extends StatelessWidget {
         ),
         Text(controller.address ?? '', style: context.tokens.readoutDense),
         ReadoutRow([
-          Readout(
-            label: 'SERVICES',
-            value: '${controller.services.length}',
-          ),
-          Readout(
-            label: 'MTU',
-            value: controller.mtu?.toString() ?? '—',
-          ),
+          Readout(label: 'SERVICES', value: '${controller.services.length}'),
+          Readout(label: 'MTU', value: controller.mtu?.toString() ?? '—'),
           Readout(
             label: 'RSSI',
             value: controller.linkRssi == null

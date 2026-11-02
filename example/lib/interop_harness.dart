@@ -568,23 +568,25 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
       return 'subscribed to $txUuid';
     });
 
-    await _check('writeCharacteristic.withResponse', () async {
-      return _roundTrip(
+    await _check(
+      'writeCharacteristic.withResponse',
+      () => _roundTrip(
         address,
         rxUuid,
         Uint8List.fromList([0x01, 0x02, 0x03]),
         withoutResponse: false,
-      );
-    });
+      ),
+    );
 
-    await _check('writeCharacteristic.withoutResponse', () async {
-      return _roundTrip(
+    await _check(
+      'writeCharacteristic.withoutResponse',
+      () => _roundTrip(
         address,
         rxUuid,
         Uint8List.fromList([0x0a, 0x0b]),
         withoutResponse: true,
-      );
-    });
+      ),
+    );
 
     // The combined characteristic, addressed by its 16 bit uuid: subscribing,
     // writing and having the echo come back on that same characteristic is the
@@ -608,26 +610,28 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
         return 'subscribed to $harnessComboUuidShort';
       });
 
-      await _check('combo.roundTrip', () async {
-        return _roundTrip(
+      await _check(
+        'combo.roundTrip',
+        () => _roundTrip(
           address,
           harnessComboUuidShort,
           Uint8List.fromList([0x11, 0x22]),
           withoutResponse: false,
           expectOn: comboUuid,
-        );
-      });
+        ),
+      );
 
       // Written to RX, which cannot notify, so this one has to come back on TX
       // even though the central is now subscribed to both.
-      await _check('multiCharacteristic.routing', () async {
-        return _roundTrip(
+      await _check(
+        'multiCharacteristic.routing',
+        () => _roundTrip(
           address,
           rxUuid,
           Uint8List.fromList([0x33]),
           withoutResponse: false,
-        );
-      });
+        ),
+      );
 
       // Asserted rather than reported: a read named by the short uuid has to
       // reach the same characteristic as its long form, and the way that broke
@@ -715,9 +719,7 @@ class _InteropHarnessAppState extends State<InteropHarnessApp> {
     );
     final received = await echo.timeout(callTimeout);
     if (!_sameBytes(received, value)) {
-      throw StateError(
-        'echoed ${_hex(received)} for ${_hex(value)}',
-      );
+      throw StateError('echoed ${_hex(received)} for ${_hex(value)}');
     }
     return 'round trip of ${value.length} bytes';
   }
