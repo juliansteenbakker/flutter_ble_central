@@ -56,8 +56,9 @@ updates:
       prefix: chore
       include: scope
 
-  # prefix-development keeps a bump of a dev_dependency, which no consumer of
-  # the package resolves, out of the "Dependencies" changelog section.
+  # Dependabot reports every pub dependency as production, so a dev_dependency
+  # bump gets the deps prefix too. Retitle those PRs to chore(deps) before
+  # squash merging, or they land in the "Dependencies" changelog section.
   - package-ecosystem: pub
     directory: /
     schedule:
@@ -66,7 +67,6 @@ updates:
       default-days: 7
     commit-message:
       prefix: deps
-      prefix-development: chore
 
   # The example resolves the plugin through a path dependency. Dependabot would
   # pin it to the released version, which breaks resolution on the next bump.
