@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.1](https://github.com/juliansteenbakker/flutter_ble_central/compare/v1.1.0...v1.1.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* exclude example from build_runner ([#151](https://github.com/juliansteenbakker/flutter_ble_central/issues/151)) ([d116cce](https://github.com/juliansteenbakker/flutter_ble_central/commit/d116cce628f327a1cc95477c956254be0209e2e3))
+
+
+### Dependencies
+
+* bump very_good_analysis from 10.3.0 to 11.0.0 ([#143](https://github.com/juliansteenbakker/flutter_ble_central/issues/143)) ([ff31a86](https://github.com/juliansteenbakker/flutter_ble_central/commit/ff31a864173d84e7eec68479fb75db0efb8d2486))
+
 ## [1.1.0](https://github.com/juliansteenbakker/flutter_ble_central/compare/v1.0.0...v1.1.0) (2026-09-03)
 
 
