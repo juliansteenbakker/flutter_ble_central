@@ -232,11 +232,7 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
     _devices.clear();
     _packetsSeen = 0;
     _isScanning = true;
-    telemetry.report(
-      grade: SignalGrade.fair,
-      caption: 'scanning',
-      level: 0.2,
-    );
+    telemetry.report(grade: SignalGrade.fair, caption: 'scanning', level: 0.2);
     notifyListeners();
   }
 
@@ -413,21 +409,19 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
       });
 
   /// Writes a descriptor on the TX characteristic.
-  Future<void> writeTxDescriptor(
-    String descriptorUuid,
-    Uint8List value,
-  ) => _call('Write descriptor', () async {
-    final tx = _tx;
-    if (tx == null) throw StateError('nothing to write');
-    await _ble.writeDescriptor(
-      address: _address!,
-      serviceUuid: tx.serviceUuid,
-      characteristicUuid: tx.uuid,
-      descriptorUuid: descriptorUuid,
-      value: value,
-    );
-    return formatHexBytes(value);
-  });
+  Future<void> writeTxDescriptor(String descriptorUuid, Uint8List value) =>
+      _call('Write descriptor', () async {
+        final tx = _tx;
+        if (tx == null) throw StateError('nothing to write');
+        await _ble.writeDescriptor(
+          address: _address!,
+          serviceUuid: tx.serviceUuid,
+          characteristicUuid: tx.uuid,
+          descriptorUuid: descriptorUuid,
+          value: value,
+        );
+        return formatHexBytes(value);
+      });
 
   /// Turns the subscription to TX on or off.
   Future<void> setNotifications({required bool enable}) =>
@@ -466,16 +460,12 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
   });
 
   /// Starts pairing. The outcome arrives on the bond stream, not from here.
-  Future<void> createBond() => _call(
-    'Pair',
-    () async => _ble.createBond(_address!).then((_) => 'asked'),
-  );
+  Future<void> createBond() =>
+      _call('Pair', () => _ble.createBond(_address!).then((_) => 'asked'));
 
   /// Removes the pairing.
-  Future<void> removeBond() => _call(
-    'Unpair',
-    () async => _ble.removeBond(_address!).then((_) => 'asked'),
-  );
+  Future<void> removeBond() =>
+      _call('Unpair', () => _ble.removeBond(_address!).then((_) => 'asked'));
 
   /// Reads the current bond.
   Future<void> readBondState() => _call('Bond', () async {
@@ -489,7 +479,7 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
   /// 15 ms interval instead of the default 30 to 50.
   Future<void> setPriority(ConnectionPriority priority) => _call(
     'Connection priority',
-    () async => _ble
+    () => _ble
         .requestConnectionPriority(address: _address!, priority: priority)
         .then((_) => priority.name),
   );
@@ -503,7 +493,7 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
   /// Asks for a PHY. It is a request: read it back to see what was agreed.
   Future<void> setPreferredPhy(GattPhy phy) => _call(
     'Preferred PHY',
-    () async => _ble
+    () => _ble
         .setPreferredPhy(address: _address!, txPhy: phy, rxPhy: phy)
         .then((_) => phy.name),
   );
@@ -511,19 +501,19 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
   /// Opens a reliable write transaction.
   Future<void> beginReliableWrite() => _call(
     'Reliable write',
-    () async => _ble.beginReliableWrite(_address!).then((_) => 'open'),
+    () => _ble.beginReliableWrite(_address!).then((_) => 'open'),
   );
 
   /// Commits one.
   Future<void> executeReliableWrite() => _call(
     'Reliable write',
-    () async => _ble.executeReliableWrite(_address!).then((_) => 'committed'),
+    () => _ble.executeReliableWrite(_address!).then((_) => 'committed'),
   );
 
   /// Abandons one.
   Future<void> abortReliableWrite() => _call(
     'Reliable write',
-    () async => _ble.abortReliableWrite(_address!).then((_) => 'aborted'),
+    () => _ble.abortReliableWrite(_address!).then((_) => 'aborted'),
   );
 
   /// Runs a plugin call and says what it did.
@@ -563,10 +553,11 @@ final class CentralController extends ChangeNotifier implements RadioAccess {
   }
 
   void _record(Uint8List bytes, PacketDirection direction) {
-    _traffic.insert(
-      0,
-      (bytes: bytes, direction: direction, at: DateTime.now()),
-    );
+    _traffic.insert(0, (
+      bytes: bytes,
+      direction: direction,
+      at: DateTime.now(),
+    ));
     if (_traffic.length > 50) _traffic.removeLast();
   }
 
